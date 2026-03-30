@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}HMS{% endblock %}</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="{{ url_for('index') }}" class="brand">HMS</a>
+        <a href="{{ url_for('index') }}#crud">Tables (CRUD)</a>
+        <a href="{{ url_for('index') }}#views">Views</a>
+        <a href="{{ url_for('reports_index') }}">Reports</a>
+        <a href="{{ url_for('flows_index') }}">Flows</a>
+        <a href="{{ url_for('docs') }}">Docs</a>
+        <a href="{{ url_for('rules') }}">Business Rules</a>
+        <a href="{{ url_for('tests') }}">Test Report</a>
+        <a href="{{ url_for('users_page') }}">Users</a>
+
+        <form
+          method="post"
+          action="{{ url_for('set_user') }}"
+          class="user-switch"
+        >
+          <span class="user-indicator user-{{ current_user.kind }}">
+            <span class="dot"></span>
+            <span class="who">{{ current_user.user }}</span>
+            <span class="role">{{ current_user.role }}</span>
+          </span>
+          <select name="user" onchange="this.form.submit()">
+            {% for key, u in all_users.items() %}
+            <option
+              value="{{ key }}"
+              {% if key == current_user_key %}selected{% endif %}
+            >
+              {{ u.label }}
+            </option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit">Switch</button></noscript>
+        </form>
+      </nav>
+    </header>
+
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %}
+      <div class="flashes">
+        {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+      <small>DMDD 6210</small>
+    </footer>
+  </body>
+</html>

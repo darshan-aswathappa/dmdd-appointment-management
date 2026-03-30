@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}HMS Docs{% endblock %}
+{% block content %}
+
+<h1>Database Object Reference</h1>
+<p class="muted">
+  Read-only reference for the PL/SQL procedures, functions, triggers, and
+  reports that back the HMS schema. Each section below mirrors the files in
+  <code>Procedures/</code>, <code>Triggers/</code>, and <code>Reports/</code>.
+</p>
+
+<nav class="docs-tabs">
+  <a href="{{ url_for('docs', tab='procedures') }}"
+     class="{{ 'active' if tab == 'procedures' else '' }}">Stored Procedures</a>
+  <a href="{{ url_for('docs', tab='functions') }}"
+     class="{{ 'active' if tab == 'functions' else '' }}">Functions</a>
+  <a href="{{ url_for('docs', tab='triggers') }}"
+     class="{{ 'active' if tab == 'triggers' else '' }}">Triggers</a>
+  <a href="{{ url_for('docs', tab='reports') }}"
+     class="{{ 'active' if tab == 'reports' else '' }}">Reports</a>
+</nav>
+
+<div class="docs-panel">
+
+{% if tab == 'procedures' %}
+  <p class="muted">
+    Stored procedures encapsulate the core business flows &mdash; booking,
+    cancelling, rescheduling, and completing appointments &mdash; and enforce
+    the validation rules that cannot be expressed as simple constraints.
+  </p>
+
+  <div class="doc-item">
+    <h3>sp_BookAppointment <span class="tag">PROCEDURE</span></h3>
+    <div class="doc-meta">File: <code>Procedures/sp_BookAppointment.sql</code></div>
+    <p>
+      Books a new appointment for a patient at a given
+      <code>DoctorSchedule</code> slot. Validates the patient, slot
+      availability, doctor vacation status, and duplicate bookings before
+      inserting the row, then returns the new <code>appointment_id</code>.
+    </p>
+    <dl>
+      <dt>p_patient_id</dt>     <dd>IN NUMBER &mdash; patient requesting the appointment</dd>
+      <dt>p_schedule_id</dt>    <dd>IN NUMBER &mdash; doctor schedule slot to book</dd>
+      <dt>p_visit_type</dt>     <dd>IN VARCHAR2 &mdash; <code>'In-Person'</code> or <code>'Teleconsultation'</code></dd>
+      <dt>p_reason</dt>         <dd>IN VARCHAR2 &mdash; free-text reason</dd>
+      <dt>p_appointment_id</dt> <dd>OUT NUMBER &mdash; new appointment ID on success</dd>
+    </dl>
+    <p><strong>Raises:</strong></p>
+    <ul>
+      <li><code>ORA-20001</code> &mdash; patient does not exist</li>
+      <li><code>ORA-20002</code> &mdash; schedule slot missing or not available</li>
+      <li><code>ORA-20003</code> &mdash; doctor is on approved vacation that day</li>
+      <li><code>ORA-20004</code> &mdash; patient already has a Scheduled appointment in that slot</li>
+    </ul>
+  </div>
+
+  <div class="doc-item">
+    <h3>sp_CancelAppointment <span class="tag">PROCEDURE</span></h3>
+    <div class="doc-meta">File: <code>Procedures/sp_CancelAppointment.sql</code></div>
+    <p>
+      Cancels a Scheduled appointment if it is at least 24 hours away.
+      Sets <code>status = 'Cancelled'</code>, stamps <code>cancelled_at</code>,
+      and stores the cancellation reason in <code>notes</code>. The history
+      row is written automatically by <code>trg_AppointmentHistory</code>.
+    </p>
+    <dl>
+      <dt>p_appointment_id</dt>      <dd>IN NUMBER &mdash; appointment to cancel</dd>
+      <dt>p_cancellation_reason</dt> <dd>IN VARCHAR2 &mdash; reason (stored in <code>notes</code>)</dd>
+    </dl>
+    <p><strong>Raises:</strong></p>
+    <ul>
+      <li><code>ORA-20001</code> &mdash; appointment missing or not in <code>Scheduled</code> status</li>
+      <li><code>ORA-20002</code> &mdash; attempting to cancel within 24 hours of the slot (BR2)</li>
+    </ul>
+  </div>
+
+  <div class="doc-item">
+    <h3>sp_RescheduleAppointment <span class="tag">PROCEDURE</span></h3>
+    <div class="doc-meta">File: <code>Procedures/sp_RescheduleAppointment.sql</code></div>
+    <p>
+      Moves an existing Scheduled appointment to a new slot. Validates the new
+      slot, checks the doctor's vacation calendar, prevents duplicate bookings,
+      and writes an explicit row into <code>AppointmentHistory</code> carrying
+      the caller-supplied <code>change_reason</code> (which a status-only
+      trigger cannot see).
+    </p>
+    <dl>
+      <dt>p_appointment_id</dt>  <dd>IN NUMBER &mdash; appointment to reschedule</dd>
+      <dt>p_new_schedule_id</dt> <dd>IN NUMBER &mdash; target slot</dd>
+      <dt>p_change_reason</dt>   <dd>IN VARCHAR2 &mdash; reason logged into history</dd>
+    </dl>
+    <p><strong>Raises:</strong></p>
+    <ul>
+      <li><code>ORA-20001</code> &mdash; appointment missing or not Scheduled</li>
+      <li><code>ORA-20002</code> &mdash; new slot missing or not available</li>
+      <li><code>ORA-20003</code> &mdash; doctor on approved vacation on the new date</li>
+      <li><code>ORA-20004</code> &mdash; patient already booked in the target slot</li>
+    </ul>
+  </div>
+
+  <div class="doc-item">
+    <h3>sp_CompleteAppointment <span class="tag">PROCEDURE</span></h3>
+    <div class="doc-meta">File: <code>Procedures/sp_CompleteAppointment.sql</code></div>
+    <p>
+      Marks a Scheduled appointment as <code>Completed</code> and writes
+      embedded billing fields (<code>bill_amount</code>,
+      <code>billing_status</code>, <code>billing_date</code>,
+      <code>due_date</code>) onto the same row. The
+      <code>trg_AppointmentInsDiscount</code> trigger then fires and
+      automatically populates <code>insurance_coverage_amt</code>.
+    </p>
+    <dl>
+      <dt>p_appointment_id</dt> <dd>IN NUMBER &mdash; appointment to complete</dd>
+      <dt>p_notes</dt>          <dd>IN VARCHAR2 (optional) &mdash; clinical notes</dd>
+      <dt>p_bill_amount</dt>    <dd>IN NUMBER &mdash; total bill for the visit</dd>
+    </dl>
+    <p><strong>Raises:</strong></p>
+    <ul>
+      <li><code>ORA-20001</code> &mdash; appointment missing or not Scheduled</li>
+    </ul>
+    <p class="muted">Billing lives on <code>Appointment</code> and <code>Admission</code>; this procedure does not insert into a separate billing table.</p>
+  </div>
+
+  <div class="doc-item">
+    <h3>sp_GetDoctorAvailability <span class="tag">PROCEDURE</span></h3>
+    <div class="doc-meta">File: <code>Procedures/sp_GetDoctorAvailability.sql</code></div>
+    <p>
+      Opens a ref cursor of available schedule slots for a doctor within a
+      date range. Excludes slots with <code>is_available = 0</code>, dates
+      overlapping an approved vacation, and slots that already carry a
+      Scheduled appointment.
+    </p>
+    <dl>
+      <dt>p_employee_id</dt> <dd>IN NUMBER &mdash; employee/doctor to query</dd>
+      <dt>p_start_date</dt>  <dd>IN DATE &mdash; inclusive range start</dd>
+      <dt>p_end_date</dt>    <dd>IN DATE &mdash; inclusive range end</dd>
+      <dt>p_cursor</dt>      <dd>OUT SYS_REFCURSOR &mdash; <code>(schedule_id, schedule_date, slot_time, slot_duration_mins, current_bookings)</code></dd>
+    </dl>
+  </div>
+{% endif %}
+
+{% if tab == 'functions' %}
+  <p class="muted">
+    Functions are pure lookups used by procedures and triggers. They return
+    a value and do not modify data.
+  </p>
+
+  <div class="doc-item">
+    <h3>fn_IsDoctorOnVacation <span class="tag">FUNCTION</span></h3>
+    <div class="doc-meta">File: <code>Procedures/fn_IsDoctorOnVacation.sql</code></div>
+    <p>
+      Returns whether an employee of type <code>Doctor</code> has an approved
+      vacation that covers the supplied date. Used by
+      <code>sp_BookAppointment</code> and <code>sp_RescheduleAppointment</code>
+      to prevent booking during time off.
+    </p>
+    <dl>
+      <dt>p_employee_id</dt> <dd>IN NUMBER &mdash; doctor to check</dd>
+      <dt>p_check_date</dt>  <dd>IN DATE &mdash; target date</dd>
+      <dt>RETURNS</dt>       <dd>NUMBER(1) &mdash; <code>1</code> if on approved vacation, <code>0</code> otherwise</dd>
+    </dl>
+    <p class="muted">
+      A vacation is considered active when
+      <code>status = 'Approved'</code> and
+      <code>p_check_date BETWEEN start_date AND end_date</code>.
+    </p>
+  </div>
+{% endif %}
+
+{% if tab == 'triggers' %}
+  <p class="muted">
+    Triggers enforce invariants the application cannot be trusted to maintain:
+    audit history, insurance calculations, and hard business rules like
+    &ldquo;no two active admissions on the same bed.&rdquo;
+  </p>
+
+  <div class="doc-item">
+    <h3>trg_AppointmentHistory <span class="tag">TRIGGER</span></h3>
+    <div class="doc-meta">File: <code>Triggers/trg_AppointmentHistory.sql</code> &middot; AFTER UPDATE ON <code>Appointment</code> (row-level)</div>
+    <p>
+      Captures every status transition on <code>Appointment</code> into
+      <code>AppointmentHistory</code>. It records the previous status, new
+      status, previous <code>schedule_id</code>, and a snapshot of the old
+      <code>slot_time</code> taken from <code>DoctorSchedule</code>.
+    </p>
+    <p>
+      <strong>When it fires:</strong> only when
+      <code>:OLD.status &lt;&gt; :NEW.status</code>. Pure
+      <code>schedule_id</code> changes are intentionally ignored here because
+      <code>sp_RescheduleAppointment</code> writes its own history row with
+      the caller-provided <code>change_reason</code>, and firing on both
+      would double-log the audit entry.
+    </p>
+  </div>
+
+  <div class="doc-item">
+    <h3>trg_AppointmentInsDiscount <span class="tag">TRIGGER</span></h3>
+    <div class="doc-meta">File: <code>Triggers/trg_AppointmentInsDiscount.sql</code> &middot; BEFORE UPDATE OF <code>bill_amount</code> ON <code>Appointment</code> (row-level, <code>WHEN NEW.bill_amount IS NOT NULL</code>)</div>
+    <p>
+      Automatically computes <code>insurance_coverage_amt</code> whenever
+      <code>bill_amount</code> is first set or subsequently changed. Looks up
+      the patient's active insurance policy and applies
+      <code>coverage_percentage</code>, capped at <code>max_coverage_amount</code>.
+    </p>
+    <p>
+      <strong>Inactive or expired policy</strong> (<code>is_active = 0</code>
+      or <code>valid_until &lt; TRUNC(SYSDATE)</code>) &rarr; coverage is set
+      to <code>0</code>. <strong>No policy linked</strong> &rarr; coverage is
+      <code>0</code>.
+    </p>
+    <p class="muted">
+      Design: fires only on UPDATE so seed rows that ship pre-computed
+      coverage are not overwritten. Uses a BEFORE trigger with direct
+      <code>:NEW</code> assignment to avoid the mutating-table problem that
+      an AFTER UPDATE + self-UPDATE would cause.
+    </p>
+  </div>
+
+  <div class="doc-item">
+    <h3>trg_AdmissionInsDiscount <span class="tag">TRIGGER</span></h3>
+    <div class="doc-meta">File: <code>Triggers/trg_AdmissionInsDiscount.sql</code> &middot; BEFORE UPDATE OF <code>bill_amount</code> ON <code>Admission</code> (row-level)</div>
+    <p>
+      Mirror of <code>trg_AppointmentInsDiscount</code> for the admission
+      side of the billing fold-in. Applies the same insurance calculation
+      whenever an admission's <code>bill_amount</code> is set or changed.
+    </p>
+  </div>
+
+  <div class="doc-item">
+    <h3>trg_PreventOccupiedBed <span class="tag warn">TRIGGER</span></h3>
+    <div class="doc-meta">File: <code>Triggers/trg_PreventOccupiedBed.sql</code> &middot; BEFORE INSERT ON <code>Admission</code> (row-level)</div>
+    <p>
+      Hard-blocks admitting a patient to a bed that already carries an
+      <code>Active</code> admission. Counts existing active admissions on
+      <code>:NEW.bed_id</code> and raises
+      <code>ORA-20002 'Bed is currently occupied...'</code> to reject the insert.
+    </p>
+    <p class="muted">
+      Oracle does not support <code>INSTEAD OF</code> triggers on tables, so
+      this is implemented as a BEFORE INSERT guard that aborts the transaction
+      rather than rewriting the row.
+    </p>
+  </div>
+{% endif %}
+
+{% if tab == 'reports' %}
+  <p class="muted">
+    Reports are saved SQL queries used for operational and financial
+    reporting. They run read-only against the schema and, where noted, rely
+    on the <code>v_billing</code> view to unify appointment and admission
+    billing.
+  </p>
+
+  <div class="doc-item">
+    <h3>rpt_DailyAppointments <span class="tag">REPORT</span></h3>
+    <div class="doc-meta">File: <code>Reports/rpt_DailyAppointments.sql</code></div>
+    <p>
+      Lists every appointment scheduled for a given date with patient,
+      doctor (via <code>Employee</code> filtered to
+      <code>employee_type = 'Doctor'</code>), department, slot time, visit
+      type, status, and reason.
+    </p>
+    <p><strong>Parameter:</strong> <code>report_date</code> (DATE) &mdash; default in the file is <code>2026-04-14</code>.</p>
+    <p><strong>Columns:</strong> AppointmentID, PatientName, DoctorName, DepartmentName, ScheduleDate, SlotTime, SlotDurationMins, VisitType, Status, Reason.</p>
+  </div>
+
+  <div class="doc-item">
+    <h3>rpt_DoctorSchedule <span class="tag">REPORT</span></h3>
+    <div class="doc-meta">File: <code>Reports/rpt_DoctorSchedule.sql</code></div>
+    <p>
+      Per-doctor schedule view for a date range. Shows each slot with its
+      current booking count and whether that day collides with an approved
+      vacation.
+    </p>
+    <p><strong>Parameters:</strong> <code>start_date</code>, <code>end_date</code> (DATE).</p>
+    <p><strong>Columns:</strong> DoctorName, Specialization, Department, ScheduleDate, SlotTime, DurationMins, CurrentBookings, OnVacation (Y/N).</p>
+    <p class="muted">
+      The <code>CurrentBookings</code> column reflects the number of
+      <code>Scheduled</code> appointments on each slot; there is no hard daily
+      cap per doctor.
+    </p>
+  </div>
+
+  <div class="doc-item">
+    <h3>rpt_BedOccupancy <span class="tag">REPORT</span></h3>
+    <div class="doc-meta">File: <code>Reports/rpt_BedOccupancy.sql</code></div>
+    <p>Two queries:</p>
+    <ul>
+      <li>
+        <strong>Detailed Bed Occupancy</strong> &mdash; every bed on every
+        active room with its department, status
+        (<code>Maintenance</code> / <code>Occupied</code> /
+        <code>Available</code>), and current patient when occupied.
+      </li>
+      <li>
+        <strong>Occupancy Summary</strong> &mdash; hospital-wide rollup:
+        total beds, occupied, available, in maintenance, and
+        <code>OccupancyPercent</code>.
+      </li>
+    </ul>
+    <p class="muted">A bed is flagged <em>Occupied</em> when an <code>Admission</code> with <code>status = 'Active'</code> points to it.</p>
+  </div>
+
+  <div class="doc-item">
+    <h3>rpt_Revenue <span class="tag">REPORT</span></h3>
+    <div class="doc-meta">File: <code>Reports/rpt_Revenue.sql</code></div>
+    <p>Three queries over <code>v_billing</code> (which unifies appointment and admission billing after the Billing-table fold-in):</p>
+    <ul>
+      <li>
+        <strong>Overall Revenue Summary</strong> &mdash; TotalBilled,
+        TotalInsuranceCoverage, NetPatientLiability, TotalCollected (from
+        <code>Payment</code> with <code>status = 'Completed'</code>), and
+        OutstandingBalance.
+      </li>
+      <li>
+        <strong>Revenue By Source</strong> &mdash; same metrics grouped by
+        <code>Appointment</code> vs <code>Admission</code>.
+      </li>
+      <li>
+        <strong>Revenue By Billing Status</strong> &mdash; breakdown across
+        <code>Pending</code>, <code>Partially Paid</code>,
+        <code>Overdue</code>, <code>Paid</code>.
+      </li>
+    </ul>
+    <p><strong>Parameters:</strong> <code>start_date</code>, <code>end_date</code> (DATE).</p>
+    <p class="muted">Payments are aggregated per source entity via <code>(appointment_id, admission_id)</code> keys since the old <code>bill_id</code> FK was retired with the Billing table.</p>
+  </div>
+
+  <div class="doc-item">
+    <h3>rpt_CancellationStats <span class="tag">REPORT</span></h3>
+    <div class="doc-meta">File: <code>Reports/rpt_CancellationStats.sql</code></div>
+    <p>
+      Per-doctor cancellation analysis for a date range. Uses two CTEs &mdash;
+      one for appointment counts and cancellation averages, one to rank each
+      doctor's most common cancellation reason from
+      <code>AppointmentHistory.change_reason</code> &mdash; then joins them
+      into the final result.
+    </p>
+    <p><strong>Parameters:</strong> <code>start_date</code>, <code>end_date</code> (DATE).</p>
+    <p><strong>Columns:</strong> DoctorName, Department, TotalAppointments, CancelledCount, CancellationRatePct, MostCommonReason, AvgDaysBeforeAppt.</p>
+    <p class="muted">Doctors are modeled as <code>Employee</code> rows filtered by <code>employee_type = 'Doctor'</code>.</p>
+  </div>
+{% endif %}
+
+</div>
+
+{% endblock %}
