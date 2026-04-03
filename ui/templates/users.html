@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Database Users{% endblock %}
+{% block content %}
+
+<h1>Database Users &amp; Roles</h1>
+<p class="muted">
+  Three Oracle users are provisioned for the HMS schema, each designed for
+  a different operational concern. The dropdown in the top-right switches
+  the UI's active connection between them so the same UI demonstrates what
+  each role can and cannot do. Permission failures raised by Oracle are
+  surfaced in the flash banner as
+  <em>&ldquo;Permission denied as <code>&lt;user&gt;</code>&rdquo;</em>.
+</p>
+
+<div class="callout">
+  <strong>You are currently connected as
+    <code>{{ current_user.user }}</code></strong>
+  &mdash; role <code>{{ current_user.role }}</code>.
+  Use the dropdown in the top nav to switch; your choice is stored in the
+  browser session and persists until you switch again.
+</div>
+
+<h2>Why three users?</h2>
+<p>
+  The HMS schema follows the Oracle convention of separating
+  <em>object ownership</em> from <em>application access</em>. Mixing the
+  two is a common security footgun: if the application connects as the
+  owner, any SQL-injection or privilege-escalation bug instantly has
+  <code>DROP TABLE</code> power. Splitting the credentials means the blast
+  radius of an application-layer compromise is bounded by whatever the
+  specific role is allowed to do.
+</p>
+
+<h2>The three users</h2>
+
+<div class="user-card kind-owner">
+  <h3>HMS <span class="muted" style="font-size: 0.85em; font-weight: normal;">(schema owner)</span></h3>
+  <div class="sub">Role: <code>OWNER</code> &middot; Credentials: <code>HMS / HospitalMS@Pass123</code></div>
+  <p>
+    Owns every object in the HMS schema &mdash; tables, indexes, views,
+    procedures, triggers, and sequences. Has system privileges
+    (<code>CREATE TABLE</code>, <code>CREATE PROCEDURE</code>, etc.) and
+    unlimited tablespace.
+  </p>
+  <p><strong>When to use it</strong></p>
+  <ul>
+    <li>Running migrations and DDL scripts from <code>DDL/</code>.</li>
+    <li>Seeding data from <code>DML/</code>.</li>
+    <li>Creating and altering procedures, triggers, and views.</li>
+    <li>Local development and schema maintenance.</li>
+  </ul>
+  <p><strong>When not to use it</strong></p>
+  <ul>
+    <li>Serving user traffic from an application. The principle of least
+      privilege says the app should never hold DDL rights.</li>
+  </ul>
+</div>
+
+<div class="user-card kind-admin">
+  <h3>admin_user <span class="muted" style="font-size: 0.85em; font-weight: normal;">(HospitalAdmin role)</span></h3>
+  <div class="sub">Role: <code>HospitalAdmin</code> &middot; Credentials: <code>admin_user / AdminPass123</code></div>
+  <p>
+    The application-tier admin. Owns <em>nothing</em> but holds the
+    <code>HospitalAdmin</code> role, which grants
+    <code>SELECT, INSERT, UPDATE, DELETE</code> on every HMS table, plus
+    <code>SELECT</code> on all HMS views, plus <code>EXECUTE</code> on
+    the appointment procedures.
+  </p>
+  <p><strong>When to use it</strong></p>
+  <ul>
+    <li>Running the appointment flows (book, cancel, reschedule, complete).</li>
+    <li>CRUD work from the <em>Tables</em> section.</li>
+    <li>Any backend service that needs to mutate data.</li>
+  </ul>
+  <p><strong>What it cannot do</strong></p>
+  <ul>
+    <li>Create, alter, or drop any object (no DDL privileges).</li>
+    <li>Grant privileges to other users.</li>
+  </ul>
+  <p class="muted">
+    Unqualified table references are resolved via
+    <code>ALTER SESSION SET CURRENT_SCHEMA = HMS</code> on connect, so the
+    same SQL works for all three users.
+  </p>
+</div>
+
+<div class="user-card kind-operator">
+  <h3>operator_user <span class="muted" style="font-size: 0.85em; font-weight: normal;">(HospitalOperator role)</span></h3>
+  <div class="sub">Role: <code>HospitalOperator</code> &middot; Credentials: <code>operator_user / OperatorPass456</code></div>
+  <p>
+    The read-only operator. Holds the <code>HospitalOperator</code> role,
+    which grants <code>SELECT</code> on all HMS tables and views and
+    nothing else &mdash; no <code>INSERT</code>, no <code>UPDATE</code>,
+    no <code>DELETE</code>, no <code>EXECUTE</code>.
+  </p>
+  <p><strong>When to use it</strong></p>
+  <ul>
+    <li>Reporting, dashboards, and analytics consumers.</li>
+    <li>Support staff who need visibility but must not be able to mutate data.</li>
+    <li>Least-privilege integrations (exports, BI tools).</li>
+  </ul>
+  <p><strong>Expected permission errors</strong></p>
+  <ul>
+    <li>Any CRUD <em>Add</em> / <em>Edit</em> / <em>Delete</em> action &rarr;
+      <code>ORA-01031: insufficient privileges</code>.</li>
+    <li>Any appointment flow that calls a procedure &rarr;
+      <code>ORA-00942</code> or <code>ORA-01031</code> (depending on
+      how the driver reports it).</li>
+    <li><em>Views</em>, <em>Reports</em>, and browse pages continue to work.</li>
+  </ul>
+</div>
+
+<h2>Permission matrix</h2>
+<table class="compact perm-matrix">
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>HMS</th>
+      <th>admin_user</th>
+      <th>operator_user</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="op">DDL (create/alter/drop tables, procedures, triggers)</td>
+      <td class="yes">yes</td>
+      <td class="no">no</td>
+      <td class="no">no</td>
+    </tr>
+    <tr>
+      <td class="op">SELECT on tables and views</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+    </tr>
+    <tr>
+      <td class="op">INSERT / UPDATE / DELETE on tables</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+      <td class="no">no</td>
+    </tr>
+    <tr>
+      <td class="op">EXECUTE on appointment procedures</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+      <td class="no">no</td>
+    </tr>
+    <tr>
+      <td class="op">Run saved reports (SELECT-based)</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+      <td class="yes">yes</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Demo walkthrough</h2>
+<ol>
+  <li>Switch to <code>operator_user</code> via the top-right dropdown.</li>
+  <li>Go to <strong>Tables</strong> &rarr; any table &rarr;
+    <em>Add</em>. Submit the form &rarr; flash shows
+    <em>&ldquo;Permission denied as operator_user - ORA-01031:
+    insufficient privileges&rdquo;</em>.</li>
+  <li>Try an appointment flow (<strong>Flows</strong> &rarr; Book) &rarr;
+    same permission error.</li>
+  <li>Open a <strong>Report</strong> &rarr; works normally (reports are
+    SELECT-only).</li>
+  <li>Switch back to <code>admin_user</code> or <code>HMS</code> &rarr;
+    rerun the write operation and it succeeds.</li>
+</ol>
+
+<p class="muted">
+  Source of truth for the role definitions:
+  <code>DDL/01_create_database.sql</code> (users) and
+  <code>DDL/06_create_roles_security.sql</code> (roles and grants).
+</p>
+
+{% endblock %}

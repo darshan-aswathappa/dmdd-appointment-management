@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Appointment Flows{% endblock %}
+{% block content %}
+
+<h1>Appointment Module &mdash; Demo Flows</h1>
+<p class="muted">
+  Every flow the appointment module supports, split into happy-path
+  executions and the validation failures each procedure raises. Positive
+  flows take inputs and succeed; negative flows use canned inputs that
+  trigger a specific <code>ORA-200xx</code> error so you can see the
+  guard working.
+</p>
+
+<h2 style="margin-top: 24px;">Positive flows <span class="badge pass" style="margin-left:8px;">Happy path</span></h2>
+<div class="card-grid">
+  {% for f in positive %}
+  <a class="card" href="{{ url_for(f.endpoint) }}">
+    <strong>{{ f.title }}</strong>
+    <div class="muted" style="margin-top: 2px;">
+      <code>{{ f.procedure }}</code>
+    </div>
+    <div class="muted" style="margin-top: 6px;">{{ f.blurb }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+<h2 style="margin-top: 32px;">Negative flows <span class="badge fail" style="margin-left:8px;">Validation errors</span></h2>
+<p class="muted">
+  Each card below is a one-click demo: click to see the exact procedure
+  call, then run it to confirm the expected <code>ORA</code> error is
+  raised. No seed data is mutated (scenarios that need live state do their
+  own setup and cleanup).
+</p>
+<div class="card-grid">
+  {% for s in negative %}
+  <a class="card" href="{{ url_for('flow_negative', scenario=s.key) }}">
+    <strong>{{ s.title }}</strong>
+    <div class="muted" style="margin-top: 2px;">
+      <code>{{ s.procedure }}</code> &middot; {{ s.rule }}
+    </div>
+    <div class="muted" style="margin-top: 6px;">{{ s.blurb }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title }}{% endblock %}
+{% block content %}
+
+<p class="muted" style="margin-bottom: 6px;">
+  <a href="{{ url_for('flows_index') }}">&larr; All flows</a>
+</p>
+
+<h1>{{ meta.title }} <span class="badge fail" style="margin-left:8px;">Negative flow</span></h1>
+
+<div class="rule-card">
+  <dl>
+    <dt>Procedure</dt>
+    <dd><code>{{ meta.procedure }}</code></dd>
+    <dt>Rule demonstrated</dt>
+    <dd>{{ meta.rule }}</dd>
+    <dt>What it does</dt>
+    <dd>{{ meta.blurb }}</dd>
+    <dt>Expected error</dt>
+    <dd><code>{{ meta.expected }}</code></dd>
+  </dl>
+</div>
+
+<form method="post" style="margin-top: 16px;">
+  <div class="form-actions" style="margin-left: 0;">
+    <button type="submit">Run scenario</button>
+  </div>
+</form>
+
+{% if result %}
+<h2>Execution</h2>
+
+{% if result.notes %}
+<ul class="muted" style="font-size: 0.9em;">
+  {% for n in result.notes %}<li>{{ n }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<div style="margin: 10px 0 4px;"><strong>Call:</strong></div>
+<pre class="terminal">{{ result.call }}</pre>
+
+{% if result.outcome == "error" %}
+  <div style="margin: 14px 0 4px;"><strong>Result:</strong>
+    <span class="badge pass" style="margin-left: 6px;">Guard fired as expected</span>
+  </div>
+  <pre class="terminal"><span class="bad">{{ result.error_message }}</span></pre>
+{% elif result.outcome == "unexpected_success" %}
+  <div style="margin: 14px 0 4px;"><strong>Result:</strong>
+    <span class="badge fail" style="margin-left: 6px;">Unexpected success</span>
+  </div>
+  <pre class="terminal"><span class="bad">Procedure returned without raising an error - the validation did NOT trigger.</span></pre>
+{% elif result.outcome == "precondition_missing" %}
+  <div style="margin: 14px 0 4px;"><strong>Result:</strong>
+    <span class="badge skipped" style="margin-left: 6px;">Precondition missing</span>
+  </div>
+  <pre class="terminal"><span class="note">Scenario could not run against the current database state. See notes above.</span></pre>
+{% endif %}
+{% endif %}
+
+{% endblock %}

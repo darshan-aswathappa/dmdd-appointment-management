@@ -1,0 +1,306 @@
+{% extends "base.html" %} {% block title %}Business Rules{% endblock %} {% block
+content %}
+
+<h1>Business Rule Documentation</h1>
+<p class="muted">
+  Business rules and transaction validations enforced by the HMS schema. Each
+  rule traces back to a specific implementation artefact &mdash; a stored
+  procedure, a trigger, a constraint, or a combination &mdash; and to a test
+  case in <code>Tests/</code>.
+</p>
+
+<h2>Summary</h2>
+<table class="compact summary-table">
+  <thead>
+    <tr>
+      <th>Rule</th>
+      <th>Description</th>
+      <th>Enforcement</th>
+      <th>Test</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>BR1</code> / <code>TV1</code></td>
+      <td>No duplicate booking (same patient + schedule slot)</td>
+      <td>
+        Procedure validation + <code>UNIQUE(patient_id, schedule_id)</code>
+      </td>
+      <td>TC01</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>BR2</code></td>
+      <td>Cancellation allowed only &ge; 24 hours before slot</td>
+      <td>Procedure check on slot datetime</td>
+      <td>TC02</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>BR3</code></td>
+      <td>Rescheduling preserves full appointment history</td>
+      <td>Explicit insert in procedure + status trigger</td>
+      <td>TC05</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>BR5</code></td>
+      <td>No bookings during approved doctor vacation</td>
+      <td>Procedure + <code>fn_IsDoctorOnVacation</code></td>
+      <td>TC04</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>BR6</code></td>
+      <td>Doctor schedule cannot overlap (same day + time)</td>
+      <td><code>UNIQUE(employee_id, schedule_date, slot_time)</code></td>
+      <td>TC08</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>TV2</code></td>
+      <td>Assigning an occupied bed must fail</td>
+      <td><code>trg_PreventOccupiedBed</code> (BEFORE INSERT)</td>
+      <td>TC06</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+    <tr>
+      <td><code>TV3</code></td>
+      <td>Bills with insurance apply the correct discount</td>
+      <td>
+        <code>trg_AppointmentInsDiscount</code> +
+        <code>trg_AdmissionInsDiscount</code>
+      </td>
+      <td>Demo flow</td>
+      <td class="status-col"><span class="badge pass">Active</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Business Rules</h2>
+
+<div class="rule-card">
+  <h3><span class="rule-id">BR1 / TV1</span> No Duplicate Booking</h3>
+  <div class="rule-meta">
+    Enforced in two layers: stored procedure and database constraint.
+  </div>
+  <dl>
+    <dt>What</dt>
+    <dd>
+      A patient cannot hold two <code>Scheduled</code> appointments on the same
+      <code>DoctorSchedule</code> slot.
+    </dd>
+    <dt>Procedure</dt>
+    <dd>
+      <code>sp_BookAppointment</code> &mdash; counts existing
+      <code>Scheduled</code> rows for <code>(patient_id, schedule_id)</code> and
+      raises <code>ORA-20004</code> on match.
+    </dd>
+    <dt>Constraint</dt>
+    <dd>
+      <code>UNIQUE(patient_id, schedule_id)</code> on
+      <code>Appointment</code> &mdash; catches any race condition that bypasses
+      the procedure check.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC01_DuplicateBooking.sql</code></dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">BR2</span> 24-Hour Cancellation Rule</h3>
+  <div class="rule-meta">Enforced in <code>sp_CancelAppointment</code>.</div>
+  <dl>
+    <dt>What</dt>
+    <dd>
+      An appointment may be cancelled only if its slot is at least 24 hours in
+      the future.
+    </dd>
+    <dt>Mechanism</dt>
+    <dd>
+      The procedure assembles the slot datetime from
+      <code>schedule_date</code> + <code>slot_time</code> and computes
+      <code>(v_appt_datetime - SYSDATE) * 24</code>. If the result is
+      <code>&lt; 24</code>, it raises <code>ORA-20002</code> and rolls back.
+    </dd>
+    <dt>On violation</dt>
+    <dd>
+      Appointment status remains <code>Scheduled</code>; no row is updated.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC02_CancelBefore24hr.sql</code></dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">BR3</span> Rescheduling Preserves History</h3>
+  <div class="rule-meta">
+    Enforced by the procedure and reinforced by a trigger.
+  </div>
+  <dl>
+    <dt>What</dt>
+    <dd>
+      Every reschedule must leave an audit trail in
+      <code>AppointmentHistory</code> that captures the previous slot and a
+      change reason.
+    </dd>
+    <dt>Procedure</dt>
+    <dd>
+      <code>sp_RescheduleAppointment</code> &mdash; after the
+      <code>UPDATE</code>, inserts a row with <code>previous_schedule_id</code>,
+      <code>previous_status</code>, <code>new_status</code>, and the
+      caller-provided <code>change_reason</code>.
+    </dd>
+    <dt>Trigger</dt>
+    <dd>
+      <code>trg_AppointmentHistory</code> fires on <em>status</em> changes only
+      (e.g. Scheduled &rarr; Cancelled / Completed). Pure schedule-id changes
+      are intentionally skipped to avoid double-logging when the procedure runs.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC05_RescheduleHistory.sql</code></dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">BR5</span> Vacation Blocking</h3>
+  <div class="rule-meta">Enforced by the procedure via a helper function.</div>
+  <dl>
+    <dt>What</dt>
+    <dd>
+      A doctor on an <em>approved</em> vacation cannot receive new bookings for
+      any date in that vacation window.
+    </dd>
+    <dt>Mechanism</dt>
+    <dd>
+      <code>fn_IsDoctorOnVacation(employee_id, date)</code> returns
+      <code>1</code> when an approved vacation row covers the date.
+      <code>sp_BookAppointment</code> and
+      <code>sp_RescheduleAppointment</code> call it before inserting and raise
+      <code>ORA-20003</code> on match.
+    </dd>
+    <dt>Note</dt>
+    <dd>
+      Only vacations with <code>status = 'Approved'</code> block bookings.
+      <code>Pending</code> / <code>Rejected</code> rows are ignored.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC04_VacationBlocking.sql</code></dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">BR6</span> Doctor Schedule Overlap Prevention</h3>
+  <div class="rule-meta">Enforced at the database level.</div>
+  <dl>
+    <dt>What</dt>
+    <dd>
+      A single doctor cannot have two schedule slots on the same date at the
+      same start time.
+    </dd>
+    <dt>Constraint</dt>
+    <dd>
+      <code>UNIQUE(employee_id, schedule_date, slot_time)</code> on
+      <code>DoctorSchedule</code> &mdash; any duplicate insert raises
+      <code>ORA-00001</code>.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC08_ScheduleOverlap.sql</code></dd>
+  </dl>
+</div>
+
+<h2>Transaction Validations</h2>
+
+<div class="rule-card">
+  <h3>
+    <span class="rule-id">TV1</span> Duplicate Booking Prevention
+    (Transactional)
+  </h3>
+  <div class="rule-meta">Same layers as BR1, viewed under concurrency.</div>
+  <dl>
+    <dt>Scenario</dt>
+    <dd>
+      Two sessions call <code>sp_BookAppointment</code> for the same patient +
+      slot near-simultaneously.
+    </dd>
+    <dt>Defense 1</dt>
+    <dd>
+      The procedure-level <code>SELECT COUNT</code> check inside the implicit
+      transaction.
+    </dd>
+    <dt>Defense 2</dt>
+    <dd>
+      The <code>UNIQUE(patient_id, schedule_id)</code> constraint catches any
+      race that slips past Defense 1.
+    </dd>
+    <dt>Outcome</dt>
+    <dd>
+      One insert succeeds; the other raises <code>ORA-20004</code> (procedure)
+      or <code>ORA-00001</code> (constraint) and rolls back.
+    </dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">TV2</span> Occupied Bed Assignment Must Fail</h3>
+  <div class="rule-meta">Enforced by <code>trg_PreventOccupiedBed</code>.</div>
+  <dl>
+    <dt>Scenario</dt>
+    <dd>
+      <code>INSERT INTO Admission</code> targets a <code>bed_id</code> that
+      already has an <code>Active</code> admission.
+    </dd>
+    <dt>Mechanism</dt>
+    <dd>
+      BEFORE INSERT row trigger counts active admissions on the target bed. If
+      any exist, it raises
+      <code>ORA-20002 'Bed is currently occupied...'</code> and aborts the
+      insert.
+    </dd>
+    <dt>Note</dt>
+    <dd>
+      Oracle does not support <code>INSTEAD OF</code> triggers on tables, so
+      this is a BEFORE INSERT guard rather than a row-rewrite.
+    </dd>
+    <dt>Test</dt>
+    <dd><code>Tests/TC06_OccupiedBedFail.sql</code></dd>
+  </dl>
+</div>
+
+<div class="rule-card">
+  <h3><span class="rule-id">TV3</span> Insurance Discount on Billing</h3>
+  <div class="rule-meta">
+    Enforced by two mirror triggers after the Billing-table fold-in.
+  </div>
+  <dl>
+    <dt>Scenario</dt>
+    <dd>
+      An <code>Appointment</code> or <code>Admission</code> has
+      <code>bill_amount</code> set or changed for a patient with active
+      insurance.
+    </dd>
+    <dt>Mechanism</dt>
+    <dd>
+      <code>trg_AppointmentInsDiscount</code> and
+      <code>trg_AdmissionInsDiscount</code> (BEFORE UPDATE OF
+      <code>bill_amount</code>) look up the patient's insurance. If
+      <code>is_active = 1</code> and
+      <code>valid_until &gt;= TRUNC(SYSDATE)</code>, they compute
+      <code>bill_amount &times; coverage_percentage / 100</code>, cap at
+      <code>max_coverage_amount</code>, and write the result back into
+      <code>insurance_coverage_amt</code>.
+    </dd>
+    <dt>Inactive / missing policy</dt>
+    <dd><code>insurance_coverage_amt = 0</code>.</dd>
+    <dt>Demo</dt>
+    <dd>
+      Observe via the <strong>Complete + bill</strong> flow &mdash;
+      <code>insurance_coverage_amt</code> is populated automatically by the
+      trigger when <code>sp_CompleteAppointment</code> sets
+      <code>bill_amount</code>.
+    </dd>
+  </dl>
+</div>
+
+{% endblock %}
