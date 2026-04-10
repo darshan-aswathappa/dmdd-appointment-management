@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Cancel appointment{% endblock %}
+{% block content %}
+<h1>Cancel appointment</h1>
+<p class="muted">
+    Calls <code>sp_CancelAppointment</code>. Enforces the 24-hour rule (BR2);
+    <code>trg_AppointmentHistory</code> will log the status change.
+</p>
+
+<form method="post" class="crud-form">
+    <label>
+        <span class="col-name">Appointment ID <span class="req">*</span></span>
+        <input type="number" name="appointment_id" required>
+    </label>
+    <label>
+        <span class="col-name">Cancellation reason</span>
+        <textarea name="reason" rows="2"></textarea>
+    </label>
+    <div class="form-actions">
+        <button type="submit">Cancel appointment</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} &mdash; view{% endblock %}
+{% block content %}
+<h1><code>{{ name }}</code> <span class="muted">(view)</span></h1>
+<p class="muted">Up to 500 rows. <a href="{{ url_for('index') }}">Back to dashboard</a></p>
+
+<div class="views-nav">
+    {% for v in views %}
+        <a href="{{ url_for('view_show', name=v) }}"
+           class="{% if v == name %}active{% endif %}">{{ v }}</a>
+    {% endfor %}
+</div>
+
+<div class="scroll-x">
+<table class="compact">
+    <thead>
+        <tr>{% for c in cols %}<th>{{ c }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
