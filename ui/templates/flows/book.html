@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Book appointment{% endblock %}
+{% block content %}
+<h1>Book appointment</h1>
+<p class="muted">Calls <code>sp_BookAppointment</code>. Runs duplicate + vacation checks (BR1, BR5).</p>
+
+<form method="post" class="crud-form">
+    <label>
+        <span class="col-name">Patient <span class="req">*</span></span>
+        <select name="patient_id" required>
+            <option value="">-- select patient --</option>
+            {% for pid, name in patients %}
+                <option value="{{ pid }}">{{ pid }} &mdash; {{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span class="col-name">Schedule slot <span class="req">*</span></span>
+        <select name="schedule_id" required>
+            <option value="">-- select open slot --</option>
+            {% for sid, doc, date, time in slots %}
+                <option value="{{ sid }}">#{{ sid }} &mdash; Dr. {{ doc }} @ {{ date }} {{ time }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span class="col-name">Visit type <span class="req">*</span></span>
+        <select name="visit_type" required>
+            <option value="In-Person">In-Person</option>
+            <option value="Teleconsultation">Teleconsultation</option>
+        </select>
+    </label>
+
+    <label>
+        <span class="col-name">Reason</span>
+        <textarea name="reason" rows="2"></textarea>
+    </label>
+
+    <div class="form-actions">
+        <button type="submit">Book</button>
+    </div>
+</form>
+{% endblock %}

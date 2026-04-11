@@ -1,0 +1,26 @@
+{% extends "base.html" %} {% block title %}Reports{% endblock %} {% block
+content %}
+
+<h1>Reports</h1>
+<p class="muted">
+  Saved SQL reports from the <code>Reports/</code> directory. Click a report to
+  execute it against the live HMS schema and render the result set.
+</p>
+
+<div>
+  {% for r in reports %}
+  <a
+    class="card"
+    style="margin-bottom: 12px"
+    href="{{ url_for('reports_show', name=r.name) }}"
+  >
+    <strong>{{ r.title }}</strong>
+    <div class="muted">{{ r.description }}</div>
+    <div class="muted" style="margin-top: 6px; font-size: 0.8em">
+      <code>{{ r.name }}.sql</code> &middot; {{ r.parameters }}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} &mdash; rows{% endblock %}
+{% block content %}
+<h1><code>{{ name }}</code></h1>
+<p class="muted">
+    Showing up to 200 rows ordered by primary key descending.
+    <a href="{{ url_for('table_new', name=name) }}">+ Add row</a>
+    &middot;
+    <a href="{{ url_for('index') }}">Back to dashboard</a>
+</p>
+
+<div class="scroll-x">
+<table class="compact">
+    <thead>
+        <tr>
+            {% for c in cols %}<th>{{ c }}</th>{% endfor %}
+            {% if pk_col %}<th>actions</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            {% for v in row %}
+                <td>{{ v }}</td>
+            {% endfor %}
+            {% if pk_col %}
+                {% set pk_idx = cols.index(pk_col) %}
+                <td class="nowrap">
+                    <a href="{{ url_for('table_edit', name=name, pk=row[pk_idx]) }}">edit</a>
+                    <form method="post"
+                          action="{{ url_for('table_delete', name=name, pk=row[pk_idx]) }}"
+                          style="display:inline"
+                          onsubmit="return confirm('Delete {{ name }} #{{ row[pk_idx] }}?');">
+                        <button type="submit" class="link-btn">delete</button>
+                    </form>
+                </td>
+            {% endif %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

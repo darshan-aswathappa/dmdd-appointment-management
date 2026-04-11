@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Complete appointment{% endblock %}
+{% block content %}
+<h1>Complete appointment + bill</h1>
+<p class="muted">
+    Calls <code>sp_CompleteAppointment(appt_id, notes, bill_amount)</code>.
+    This UPDATEs the Appointment row, which fires
+    <code>trg_AppointmentInsDiscount</code>. The trigger computes
+    <code>insurance_coverage_amt</code> before the UPDATE commits.
+</p>
+
+<form method="post" class="crud-form">
+    <label>
+        <span class="col-name">Appointment ID <span class="req">*</span></span>
+        <input type="number" name="appointment_id" required>
+    </label>
+    <label>
+        <span class="col-name">Bill amount ($) <span class="req">*</span></span>
+        <input type="number" step="0.01" name="bill_amount" required>
+    </label>
+    <label>
+        <span class="col-name">Clinical notes</span>
+        <textarea name="notes" rows="3"></textarea>
+    </label>
+    <div class="form-actions">
+        <button type="submit">Complete + bill</button>
+    </div>
+</form>
+
+{% if result %}
+<h2>Appointment after trigger</h2>
+<table class="compact">
+    <tr><th>Appointment ID</th><td>{{ result.appointment_id }}</td></tr>
+    <tr><th>Status</th><td>{{ result.status }}</td></tr>
+    <tr><th>Bill amount</th><td>${{ result.bill_amount }}</td></tr>
+    <tr class="highlight"><th>Insurance coverage (computed by trigger)</th>
+        <td><strong>${{ result.insurance_coverage_amt }}</strong></td></tr>
+    <tr><th>Billing status</th><td>{{ result.billing_status }}</td></tr>
+    <tr><th>Billing date</th><td>{{ result.billing_date }}</td></tr>
+    <tr><th>Due date</th><td>{{ result.due_date }}</td></tr>
+</table>
+{% endif %}
+{% endblock %}
