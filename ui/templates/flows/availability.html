@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Doctor availability{% endblock %}
+{% block content %}
+
+<p class="muted" style="margin-bottom: 6px;">
+  <a href="{{ url_for('flows_index') }}">&larr; All flows</a>
+</p>
+
+<h1>Check doctor availability</h1>
+<p class="muted">
+  Calls <code>sp_GetDoctorAvailability(employee_id, start_date, end_date,
+  OUT ref_cursor)</code>. Returns every open slot for the doctor in the
+  range, excluding days that overlap an approved vacation and slots
+  already carrying a Scheduled appointment.
+</p>
+
+<form method="post" class="crud-form">
+  <label>
+    <span class="col-name">Doctor <span class="req">*</span></span>
+    <select name="employee_id" required>
+      <option value="">-- select doctor --</option>
+      {% for eid, name in doctors %}
+      <option value="{{ eid }}" {% if form.employee_id == eid|string %}selected{% endif %}>
+        {{ eid }} &mdash; {{ name }}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>
+    <span class="col-name">Start date <span class="req">*</span></span>
+    <input type="date" name="start_date" value="{{ form.start_date or '2026-04-01' }}" required>
+  </label>
+
+  <label>
+    <span class="col-name">End date <span class="req">*</span></span>
+    <input type="date" name="end_date" value="{{ form.end_date or '2026-04-30' }}" required>
+  </label>
+
+  <div class="form-actions">
+    <button type="submit">Run</button>
+  </div>
+</form>
+
+{% if result %}
+<h2>Available slots
+  <span class="muted" style="font-size: 0.7em; font-weight: normal;">
+    ({{ result.rows|length }} row{{ '' if result.rows|length == 1 else 's' }})
+  </span>
+</h2>
+{% if not result.rows %}
+<p class="muted"><em>No open slots in the selected range.</em></p>
+{% else %}
+<div class="scroll-x">
+  <table class="compact">
+    <thead>
+      <tr>{% for c in result.cols %}<th>{{ c }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in result.rows %}
+      <tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}
