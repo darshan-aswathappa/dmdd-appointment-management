@@ -1,0 +1,69 @@
+{% extends "base.html" %} {% block title %}HMS Dashboard{% endblock %} {% block
+content %}
+<h1>Hospital Management System</h1>
+<p class="muted">
+  Minimal interface over the HMS schema. Everything you do here writes to the
+  HMS Oracle schema directly.
+</p>
+
+{% if errors %}
+<div class="flash error">
+  <strong>DB errors at startup:</strong>
+  <ul>
+    {% for e in errors %}
+    <li>{{ e }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<section id="flows">
+  <h2>Demo flows</h2>
+  <p>
+    <a
+      class="card"
+      style="display: inline-block"
+      href="{{ url_for('flows_index') }}"
+    >
+      <strong>Open Appointment Flows &rarr;</strong>
+    </a>
+  </p>
+</section>
+
+<section id="crud">
+  <h2>Tables</h2>
+  <table class="compact">
+    <thead>
+      <tr>
+        <th>Table</th>
+        <th>Rows</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tables %}
+      <tr>
+        <td><code>{{ t }}</code></td>
+        <td>{{ counts.get(t, '-') }}</td>
+        <td>
+          <a href="{{ url_for('table_list', name=t) }}">View</a>
+          &middot;
+          <a href="{{ url_for('table_new', name=t) }}">Add</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section id="views">
+  <h2>Views</h2>
+  <ul>
+    {% for v in views %}
+    <li>
+      <a href="{{ url_for('view_show', name=v) }}"><code>{{ v }}</code></a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
