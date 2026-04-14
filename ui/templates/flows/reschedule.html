@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Reschedule{% endblock %}
+{% block content %}
+<h1>Reschedule appointment</h1>
+<p class="muted">
+    Calls <code>sp_RescheduleAppointment</code>. Writes the previous schedule
+    and reason to <code>AppointmentHistory</code> (BR3).
+</p>
+
+<form method="post" class="crud-form">
+    <label>
+        <span class="col-name">Appointment ID <span class="req">*</span></span>
+        <input type="number" name="appointment_id" required>
+    </label>
+    <label>
+        <span class="col-name">New schedule slot <span class="req">*</span></span>
+        <select name="new_schedule_id" required>
+            <option value="">-- select open slot --</option>
+            {% for sid, doc, date, time in slots %}
+                <option value="{{ sid }}">#{{ sid }} &mdash; Dr. {{ doc }} @ {{ date }} {{ time }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        <span class="col-name">Change reason</span>
+        <textarea name="reason" rows="2"></textarea>
+    </label>
+    <div class="form-actions">
+        <button type="submit">Reschedule</button>
+    </div>
+</form>
+{% endblock %}

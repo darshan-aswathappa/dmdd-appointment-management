@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title }} &ndash; Report{% endblock %}
+{% block content %}
+
+<p class="muted" style="margin-bottom: 6px;">
+  <a href="{{ url_for('reports_index') }}">&larr; All reports</a>
+</p>
+
+<div class="report-header">
+  <h1 style="margin: 0;">{{ meta.title }}</h1>
+  <div class="meta">
+    <code>Reports/{{ meta.name }}.sql</code> &middot; Parameters: {{ meta.parameters }}
+  </div>
+</div>
+<p class="muted">{{ meta.description }}</p>
+
+<nav class="views-nav">
+  {% for r in reports %}
+  <a href="{{ url_for('reports_show', name=r.name) }}"
+     class="{{ 'active' if r.name == meta.name else '' }}">
+    {{ r.title }}
+  </a>
+  {% endfor %}
+</nav>
+
+{% for result in results %}
+<div class="report-result">
+  <h3>
+    {{ result.label }}
+    {% if result.error is none %}
+    <span class="row-count">({{ result.rows|length }} row{{ '' if result.rows|length == 1 else 's' }})</span>
+    {% endif %}
+  </h3>
+
+  {% if result.error %}
+    <div class="err">{{ result.error }}</div>
+  {% elif not result.rows %}
+    <div class="empty">No rows returned.</div>
+  {% else %}
+    <div class="scroll-x">
+      <table class="compact">
+        <thead>
+          <tr>
+            {% for c in result.cols %}<th>{{ c }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in result.rows %}
+          <tr>
+            {% for v in row %}<td>{{ v }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  <details>
+    <summary>Show SQL</summary>
+    <pre class="sql">{{ result.sql }}</pre>
+  </details>
+</div>
+{% endfor %}
+
+{% endblock %}
