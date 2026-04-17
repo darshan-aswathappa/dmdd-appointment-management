@@ -1,0 +1,406 @@
+{% extends "base.html" %} {% block title %}Test Case Report{% endblock %} {%
+block content %}
+
+<h1>Test Case Report</h1>
+<p class="muted">
+  Automated PL/SQL test harnesses that exercise each business rule and
+  transaction validation. Every test is self-contained: it performs its own
+  setup, attempts the action under test, verifies the post-state, and cleans up
+  any rows it created. Output is produced via
+  <code>DBMS_OUTPUT.PUT_LINE</code>; <code>SET SERVEROUTPUT ON</code> must be
+  active in the client to see it.
+</p>
+
+<h2>Summary</h2>
+<table class="compact summary-table">
+  <thead>
+    <tr>
+      <th>Test</th>
+      <th>Name</th>
+      <th>Business Rule</th>
+      <th>Script</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>TC01</code></td>
+      <td>Duplicate Booking Prevention</td>
+      <td>BR1 / TV1</td>
+      <td><code>Tests/TC01_DuplicateBooking.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+    <tr>
+      <td><code>TC02</code></td>
+      <td>Cancel Before 24-Hour Window</td>
+      <td>BR2</td>
+      <td><code>Tests/TC02_CancelBefore24hr.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+    <tr>
+      <td><code>TC04</code></td>
+      <td>Vacation Blocking</td>
+      <td>BR5</td>
+      <td><code>Tests/TC04_VacationBlocking.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+    <tr>
+      <td><code>TC05</code></td>
+      <td>Reschedule History Audit Trail</td>
+      <td>BR3</td>
+      <td><code>Tests/TC05_RescheduleHistory.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+    <tr>
+      <td><code>TC06</code></td>
+      <td>Occupied Bed Prevention</td>
+      <td>TV2</td>
+      <td><code>Tests/TC06_OccupiedBedFail.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+    <tr>
+      <td><code>TC07</code></td>
+      <td>Insurance Discount Calculation</td>
+      <td>TV3</td>
+      <td>Demo flow (Complete + bill)</td>
+      <td class="status-col"><span class="badge notrun">Demo-only</span></td>
+    </tr>
+    <tr>
+      <td><code>TC08</code></td>
+      <td>Doctor Schedule Overlap</td>
+      <td>BR6</td>
+      <td><code>Tests/TC08_ScheduleOverlap.sql</code></td>
+      <td class="status-col"><span class="badge pass">Pass</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>How to read the output blocks.</strong> Each test prints a header, a
+  <code>SETUP</code> line, an <code>ACTION</code> / <code>VERIFY</code> block,
+  and a final <code>TC## RESULT: PASS | FAIL | SKIPPED</code> line. The terminal
+  blocks below reproduce the expected shape of <code>DBMS_OUTPUT</code> when run
+  against the seeded schema.
+</div>
+
+<h2>Detailed Test Cases</h2>
+
+<!-- TC01 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC01</span> Duplicate Booking Prevention
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Business Rule: BR1 / TV1 &middot; File:
+    <code>Tests/TC01_DuplicateBooking.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that <code>sp_BookAppointment</code> rejects a second booking for
+      the same <code>(patient_id, schedule_id)</code> when the first is already
+      <code>Scheduled</code>.
+    </dd>
+    <dt>Preconditions</dt>
+    <dd>
+      Seed data: patient 21 has a Scheduled appointment at schedule slot 6
+      (<code>appointment_id = 21</code>).
+    </dd>
+    <dt>Steps</dt>
+    <dd>
+      Call
+      <code
+        >sp_BookAppointment(21, 6, 'In-Person', 'TC01 duplicate test',
+        ...)</code
+      >
+      a second time.
+    </dd>
+    <dt>Expected</dt>
+    <dd>
+      Procedure raises <code>ORA-20004</code>; the error message contains
+      <em>&ldquo;scheduled appointment already exists&rdquo;</em>.
+    </dd>
+    <dt>Pass criteria</dt>
+    <dd>Exception caught, message matches, no new row inserted.</dd>
+  </dl>
+  <pre class="terminal">=== TC01: Duplicate Booking Prevention ===
+
+SETUP: Confirmed existing Scheduled appointment for patient 21 at schedule slot 6.
+Caught expected error: <span class="bad">ORA-20004: A scheduled appointment already exists for patient 21 at schedule slot 6.</span>
+<span class="ok">PASS: Duplicate booking was correctly rejected.</span>
+<span class="ok">TC01 RESULT: PASS</span>
+
+=== TC01 Complete ===</pre>
+</div>
+
+<!-- TC02 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC02</span> Cancel Before 24-Hour Window
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Business Rule: BR2 &middot; File:
+    <code>Tests/TC02_CancelBefore24hr.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that <code>sp_CancelAppointment</code> rejects a cancellation
+      attempt when the slot is less than 24 hours away.
+    </dd>
+    <dt>Setup</dt>
+    <dd>
+      Creates a fresh <code>DoctorSchedule</code> row for today, 30 minutes in
+      the future, and books an appointment on it for patient 61.
+    </dd>
+    <dt>Steps</dt>
+    <dd>Call <code>sp_CancelAppointment</code> on the new appointment.</dd>
+    <dt>Expected</dt>
+    <dd>
+      Procedure raises <code>ORA-20002</code> with
+      <em>&ldquo;must be made at least 24 hours&rdquo;</em>. Appointment remains
+      <code>Scheduled</code>.
+    </dd>
+    <dt>Cleanup</dt>
+    <dd>Test deletes the appointment and schedule row it created.</dd>
+  </dl>
+  <pre class="terminal">=== TC02: Cancel Before 24-Hour Window ===
+
+SETUP: Created schedule slot (ID: 209) for today at 16:19
+SETUP: Created appointment (ID: 55) for patient 61
+Caught expected error: <span class="bad">ORA-20002: Cannot cancel appointment 55. Cancellations must be made at least 24 hours in advance. Current lead time: 0 hours.</span>
+<span class="ok">PASS: Cancellation within 24-hour window was correctly rejected. Status remains Scheduled.</span>
+<span class="ok">TC02 RESULT: PASS</span>
+
+CLEANUP: Removed test appointment and schedule slot.
+=== TC02 Complete ===</pre>
+  <div class="callout">
+    <strong>Known quirk.</strong> If the test is run so close to midnight that
+    <code>SYSTIMESTAMP + 30 min</code> rolls into tomorrow, the lead time
+    computation can report a value &ge; 24 and the test will fail. The
+    underlying procedure is still correct; the harness, not the rule, is
+    sensitive to clock edge cases.
+  </div>
+</div>
+
+<!-- TC04 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC04</span> Vacation Blocking
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Business Rule: BR5 &middot; File:
+    <code>Tests/TC04_VacationBlocking.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that <code>sp_BookAppointment</code> refuses to book during an
+      approved doctor vacation.
+    </dd>
+    <dt>Preconditions</dt>
+    <dd>
+      Doctor 5 has approved vacation 2026-04-21 &rarr; 2026-04-23. Schedule slot
+      174 falls on 2026-04-22.
+    </dd>
+    <dt>Steps</dt>
+    <dd>
+      Probe <code>fn_IsDoctorOnVacation(5, '2026-04-22')</code> (must return 1),
+      then call <code>sp_BookAppointment(65, 174, ...)</code>.
+    </dd>
+    <dt>Expected</dt>
+    <dd>
+      Function returns <code>1</code>. Procedure raises <code>ORA-20003</code>;
+      message contains <em>&ldquo;on approved vacation&rdquo;</em>.
+    </dd>
+  </dl>
+  <pre class="terminal">=== TC04: Vacation Blocking ===
+
+SETUP: fn_IsDoctorOnVacation(5, 2026-04-22) = 1
+Caught expected error: <span class="bad">ORA-20003: Doctor (Employee ID: 5) is on approved vacation on 2026-04-22. Cannot book appointment.</span>
+<span class="ok">PASS: Booking during approved vacation was correctly rejected.</span>
+<span class="ok">TC04 RESULT: PASS</span>
+
+=== TC04 Complete ===</pre>
+</div>
+
+<!-- TC05 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC05</span> Reschedule History Audit Trail
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Business Rule: BR3 &middot; File:
+    <code>Tests/TC05_RescheduleHistory.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that <code>sp_RescheduleAppointment</code> moves the appointment
+      to a new slot and writes a matching <code>AppointmentHistory</code> row.
+    </dd>
+    <dt>Preconditions</dt>
+    <dd>
+      Seed appointment 22 is <code>Scheduled</code> on slot 18. Slot 19 is
+      <code>is_available = 1</code>.
+    </dd>
+    <dt>Steps</dt>
+    <dd>
+      Record history row count, call
+      <code>sp_RescheduleAppointment(22, 19, 'TC05 reschedule test')</code>,
+      reread history.
+    </dd>
+    <dt>Expected</dt>
+    <dd>
+      History row count increases by one. Newest row has
+      <code>previous_schedule_id = 18</code>,
+      <code>previous_status = 'Scheduled'</code>,
+      <code>new_status = 'Scheduled'</code>.
+      <code>Appointment.schedule_id</code> on row 22 is now <code>19</code>.
+    </dd>
+    <dt>Cleanup</dt>
+    <dd>
+      Test reverts the appointment to slot 18 and deletes the test-specific
+      history row.
+    </dd>
+  </dl>
+  <pre class="terminal">=== TC05: Reschedule History Audit Trail ===
+
+SETUP: Appointment 22 confirmed. History rows before: 0
+ACTION: sp_RescheduleAppointment executed successfully.
+VERIFY: History rows after: 1
+VERIFY: Appointment.schedule_id now: 19
+VERIFY: Most recent history record values:
+  previous_schedule_id = 18
+  previous_status      = Scheduled
+  new_status           = Scheduled
+<span class="ok">PASS: History record captures previous slot/status and appointment now points to new slot.</span>
+<span class="ok">TC05 RESULT: PASS</span>
+
+CLEANUP: Reverted appointment 22 to original schedule slot and removed test history.
+=== TC05 Complete ===</pre>
+</div>
+
+<!-- TC06 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC06</span> Occupied Bed Prevention
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Transaction Validation: TV2 &middot; File:
+    <code>Tests/TC06_OccupiedBedFail.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that <code>trg_PreventOccupiedBed</code> blocks an
+      <code>INSERT INTO Admission</code> targeting a bed that already has an
+      active admission.
+    </dd>
+    <dt>Preconditions</dt>
+    <dd>
+      Seed data: bed 51 holds an <code>Active</code> admission (admission 1,
+      patient 51).
+    </dd>
+    <dt>Steps</dt>
+    <dd>
+      Attempt to INSERT a new <code>Active</code> admission for patient 66 on
+      bed 51.
+    </dd>
+    <dt>Expected</dt>
+    <dd>
+      Trigger raises <code>ORA-20002 'Bed is currently occupied...'</code>;
+      admission row count for bed 51 is unchanged.
+    </dd>
+  </dl>
+  <pre class="terminal">=== TC06: Occupied Bed Prevention ===
+
+SETUP: Confirmed bed 51 has an Active admission.
+Caught expected error: <span class="bad">ORA-20002: Bed is currently occupied. Transaction failed. Cannot admit patient to an occupied bed.</span>
+<span class="ok">PASS: Trigger correctly prevented admission to an occupied bed. No new row inserted.</span>
+<span class="ok">TC06 RESULT: PASS</span>
+
+=== TC06 Complete ===</pre>
+</div>
+
+<!-- TC08 --------------------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC08</span> Doctor Schedule Overlap
+    <span class="badge pass">Pass</span>
+  </h3>
+  <div class="test-meta">
+    Business Rule: BR6 &middot; File:
+    <code>Tests/TC08_ScheduleOverlap.sql</code>
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Confirm that the composite <code>UNIQUE</code> constraint on
+      <code>DoctorSchedule</code> rejects a duplicate
+      <code>(employee_id, schedule_date, slot_time)</code>.
+    </dd>
+    <dt>Preconditions</dt>
+    <dd>Seed row for employee 1 on 2026-04-14 at 09:00 exists.</dd>
+    <dt>Steps</dt>
+    <dd>Attempt to INSERT another row with the same three values.</dd>
+    <dt>Expected</dt>
+    <dd>
+      Oracle raises <code>ORA-00001</code> (unique constraint violated). No
+      duplicate row is inserted.
+    </dd>
+  </dl>
+  <pre class="terminal">=== TC08: Schedule Overlap Prevention ===
+
+SETUP: Confirmed existing schedule for employee 1 on 2026-04-14 at 09:00.
+Caught expected error (code -1): <span class="bad">ORA-00001: unique constraint (HMS.UQ_DOCTORSCHEDULE_SLOT) violated</span>
+<span class="ok">PASS: UNIQUE constraint correctly prevented duplicate schedule entry.</span>
+<span class="ok">TC08 RESULT: PASS</span>
+
+=== TC08 Complete ===</pre>
+</div>
+
+<!-- TC07 demo-only ----------------------------------------------------- -->
+<div class="test-card">
+  <h3>
+    <span class="test-id">TC07</span> Insurance Discount Calculation
+    <span class="badge notrun">Demo-only</span>
+  </h3>
+  <div class="test-meta">
+    Transaction Validation: TV3 &middot; Demonstrated via the
+    <strong>Complete + bill</strong> flow.
+  </div>
+  <dl>
+    <dt>Goal</dt>
+    <dd>
+      Show that <code>trg_AppointmentInsDiscount</code> /
+      <code>trg_AdmissionInsDiscount</code> compute
+      <code>insurance_coverage_amt</code> correctly.
+    </dd>
+    <dt>How to run</dt>
+    <dd>
+      Open
+      <a href="{{ url_for('flow_complete') }}"
+        ><strong>Complete + bill</strong></a
+      >, supply a <code>Scheduled</code> appointment ID and a
+      <code>bill_amount</code>, submit. The result panel shows
+      <code>insurance_coverage_amt</code> populated by the trigger.
+    </dd>
+    <dt>Expected</dt>
+    <dd>
+      For a patient with an active policy:
+      <code
+        >coverage = MIN(bill_amount &times; coverage_percentage / 100,
+        max_coverage_amount)</code
+      >. For a patient with no / inactive / expired policy:
+      <code>coverage = 0</code>.
+    </dd>
+  </dl>
+</div>
+
+{% endblock %}
