@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Indexes{% endblock %}
+{% block content %}
+<h1>Indexes</h1>
+<p class="muted">
+  Every B-tree index on the HMS schema, grouped by table, with the query
+  pattern it accelerates. Oracle auto-creates a unique index for each
+  <code>PRIMARY KEY</code> and <code>UNIQUE</code> constraint; the rest
+  are explicit performance indexes declared in
+  <code>DDL/03_create_tables.sql</code> (FK &amp; lookup) and
+  <code>DDL/04_create_indexes.sql</code> (workload-specific).
+</p>
+
+<p class="muted">
+  <strong>{{ total }}</strong> indexes total &mdash;
+  {{ pk_count }} primary key, {{ uq_count }} unique, {{ ix_count }} secondary.
+</p>
+
+<div class="views-nav">
+  {% for table, _ in groups %}
+  <a href="#t-{{ table }}">{{ table }}</a>
+  {% endfor %}
+</div>
+
+{% for table, items in groups %}
+<section id="t-{{ table }}" style="margin-top: 28px">
+  <h2 style="margin-bottom: 4px"><code>{{ table }}</code></h2>
+  <p class="muted" style="margin-top: 0">
+    {{ items | length }} index{{ '' if items|length == 1 else 'es' }}
+  </p>
+  <div class="scroll-x">
+    <table class="compact">
+      <thead>
+        <tr>
+          <th style="width: 260px">Index</th>
+          <th style="width: 110px">Kind</th>
+          <th style="width: 260px">Columns</th>
+          <th>Why it exists</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ix in items %}
+        <tr>
+          <td><code>{{ ix.name }}</code></td>
+          <td>
+            {% if ix.kind == 'PRIMARY KEY' %}
+            <span style="color: #9333ea; font-weight: 600">PK</span>
+            {% elif ix.kind == 'UNIQUE' %}
+            <span style="color: #1565c0; font-weight: 600">UNIQUE</span>
+            {% else %}
+            <span style="color: #16a34a; font-weight: 600">INDEX</span>
+            {% endif %}
+          </td>
+          <td><code>{{ ix.cols }}</code></td>
+          <td>{{ ix.why }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

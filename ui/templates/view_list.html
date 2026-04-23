@@ -8,7 +8,7 @@
 {% if meta %}
 <p class="muted"><code>{{ name }}</code> &mdash; {{ meta.description }}</p>
 {% endif %}
-<p class="muted">Up to 500 rows. <a href="{{ url_for('index') }}">Back to dashboard</a></p>
+<p class="muted">Up to 500 rows. <a href="{{ url_for('views_index') }}">Back to views</a></p>
 
 <div class="views-nav">
     {% for v in views %}

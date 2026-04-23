@@ -240,6 +240,175 @@ VIEWS_META_BY_NAME = {v["name"]: v for v in VIEWS_META}
 
 
 # ---------------------------------------------------------------------------
+# Index metadata (explanations for every B-tree index on the schema)
+# ---------------------------------------------------------------------------
+# Grouped by table in the order a reader of 03_create_tables.sql would
+# encounter them. Each entry: (index_name, columns, kind, why).
+#   kind in {"PRIMARY KEY", "UNIQUE", "INDEX"}
+INDEX_EXPLANATIONS = {
+    # Primary Keys
+    "PK_Insurance": "Enforces row uniqueness and anchors every FK lookup from Patient.insurance_id during claim resolution in Payment workflows. Oracle auto-creates a unique index used on every primary-key equality join.",
+    "PK_Department": "Ensures each department row is uniquely identifiable and underpins joins from Employee and Room when rendering org-chart views and department-filtered rosters.",
+    "PK_Employee": "Backbone for every join that resolves a doctor, nurse, or admitting staff member - used by sp_BookAppointment, sp_GetDoctorAvailability, and every report that displays a provider name.",
+    "PK_Patient": "Anchors patient-centric joins across Appointment, Admission, Prescription, and Payment; hit on nearly every clinical and billing query in the system.",
+    "PK_DoctorSchedule": "Unique slot identifier used by sp_BookAppointment, sp_RescheduleAppointment, and sp_CancelAppointment to lock and update the exact schedule row under contention.",
+    "PK_DoctorVacation": "Used by the approvals workflow and audit screens to retrieve a specific vacation request by its identifier.",
+    "PK_Appointment": "Central key referenced by sp_CompleteAppointment, sp_CancelAppointment, AppointmentHistory audit writes, Prescription, and Payment - one of the hottest PKs in the schema.",
+    "PK_AppointmentHistory": "Uniquely identifies each audit event; supports chronological ordering when replaying the lifecycle of an appointment.",
+    "PK_Room": "Resolves room metadata on every Bed join and powers the department-to-room drilldown in facility management views.",
+    "PK_Bed": "Referenced by Admission on every inpatient assignment; backs V_BED_STATUS lookups when freeing or occupying a specific bed.",
+    "PK_Admission": "Anchors inpatient joins to Prescription, Payment, and discharge workflows; used whenever a single admission record is retrieved or updated.",
+    "PK_Prescription": "Unique handle for pharmacy fulfillment and prescription edits from the clinical UI.",
+    "PK_Payment": "Primary handle used by the billing UI and refund/adjustment flows to operate on a single financial transaction.",
+
+    # Unique Constraints
+    "UQ_Insurance_PolicyNumber": "Guarantees no two carriers share a policy number and accelerates insurance lookup by policy string during patient registration and claim entry.",
+    "UQ_Employee_LicenseNumber": "Enforces credentialing uniqueness and speeds license-based lookups during credentialing audits and regulatory reporting.",
+    "UQ_DoctorSchedule_EmployeeDateTime": "Enforces no-double-booking at the storage layer (same doctor + date + time is impossible) and accelerates the slot-existence probe inside sp_BookAppointment.",
+    "UQ_Appointment_PatientSchedule": "Enforces BR1 (a patient cannot book the same slot twice) and short-circuits the duplicate-booking check in sp_BookAppointment before any INSERT.",
+    "UQ_Room_RoomNumber": "Prevents duplicate room numbers and supports fast room lookup by the human-readable number shown in admission screens.",
+    "UQ_Bed_RoomBedNumber": "Ensures bed numbering is unique within a room and accelerates the room+bed composite lookup used when nurses assign inpatients.",
+
+    # FK / Lookup indexes (from 03_create_tables.sql)
+    "IX_Employee_DepartmentId": "Avoids table-locking cascades when Department rows change and drives the departmental staff roster queries and headcount reports.",
+    "IX_Employee_Type": "Lets sp_GetDoctorAvailability and the doctor-picker UI filter the Employee table to providers only without scanning nurses and support staff.",
+    "IX_Patient_InsuranceId": "Speeds insurance-to-patient rollups used by billing dashboards and prevents lock escalation when an insurance record is updated.",
+    "IX_DoctorSchedule_EmployeeDate": "Hot path for sp_GetDoctorAvailability and sp_BookAppointment - lets the planner seek directly to one doctor's slots for a given day instead of scanning the full schedule.",
+    "IX_DoctorVacation_ApprovedBy": "Supports the approver's queue view and removes full-table scans when a manager's employee record is modified.",
+    "IX_Appointment_PatientId": "Drives the patient history panel and every sp_* procedure that validates a patient's existing bookings; also required to avoid FK-induced locking on Patient updates.",
+    "IX_Appointment_ScheduleId": "Lets sp_CancelAppointment and sp_RescheduleAppointment locate the appointment tied to a given slot instantly and prevents lock contention on DoctorSchedule deletes.",
+    "IX_Room_DepartmentId": "Powers the departmental bed-inventory view and avoids scans when departments are reorganized.",
+    "IX_Bed_RoomId": "Resolves the beds-in-a-room list for the nurse station UI and the occupancy breakdown behind V_BED_STATUS.",
+    "IX_Admission_PatientId": "Drives the patient's inpatient history and supports readmission-rate reporting without scanning the full Admission table.",
+    "IX_Admission_BedId": "Used by V_BED_STATUS and discharge workflows to find the active admission occupying a specific bed.",
+    "IX_Admission_AdmittingEmployeeId": "Supports provider-productivity reports and the admitting physician's caseload view.",
+    "IX_Admission_IcuApprovedBy": "Feeds the ICU approval audit trail and the attending intensivist's approved-admissions queue.",
+    "IX_Prescription_AppointmentId": "Fetches the prescriptions tied to a visit for the post-visit summary and pharmacy dispatch.",
+    "IX_Prescription_AdmissionId": "Retrieves inpatient medication orders during rounds and for the discharge summary.",
+    "IX_Payment_AppointmentId": "Resolves outpatient charges when generating receipts and reconciling outpatient billing.",
+    "IX_Payment_AdmissionId": "Aggregates inpatient charges for the itemized admission bill and for revenue-cycle reporting.",
+
+    # Performance indexes (from 04_create_indexes.sql)
+    "IX_Appointment_Status": "Filters the appointment board to Scheduled/Completed/Cancelled/No-Show lanes and drives no-show-rate KPIs without scanning historical rows.",
+    "IX_Appointment_BillingStatus": "Powers the billing work queue that pulls only unbilled or pending-claim appointments for the revenue-cycle team.",
+    "IX_Appointment_BillingDate": "Supports date-bounded billing reports and month-end financial closeouts by enabling range scans over billed appointments.",
+    "IX_DoctorVacation_EmpDates": "Composite index that satisfies the BR5 vacation-overlap probe in sp_BookAppointment in a single range seek rather than scanning every vacation row for that doctor.",
+    "IX_ApptHist_Appointment": "Fetches the full chronological audit trail for one appointment on the history drawer in the UI and during compliance reviews.",
+    "IX_Admission_Bed_Status": "Drives V_BED_STATUS and rpt_BedOccupancy - the composite lets the planner find the currently active admission per bed without filtering discharged rows.",
+    "IX_Admission_BillingStatus": "Isolates admissions in each billing state for the inpatient revenue-cycle queue and aging-AR reports.",
+    "IX_Admission_BillingDate": "Enables date-range scans for inpatient billing reconciliation and period-end financial reports.",
+    "IX_Employee_Specialization": "Backs the specialty-based doctor search in the appointment-booking UI (e.g., 'find me a Cardiologist') without a full Employee scan.",
+    "IX_Patient_Name": "Powers the front-desk patient lookup by last name (then first name) used at check-in and in patient-merge workflows.",
+}
+
+
+def _idx(name: str, cols: str, kind: str) -> dict:
+    return {
+        "name": name,
+        "cols": cols,
+        "kind": kind,
+        "why": INDEX_EXPLANATIONS.get(name, ""),
+    }
+
+
+# Grouped by table, in schema-declaration order
+INDEXES_BY_TABLE = [
+    ("Insurance", [
+        _idx("PK_Insurance", "insurance_id", "PRIMARY KEY"),
+        _idx("UQ_Insurance_PolicyNumber", "policy_number", "UNIQUE"),
+    ]),
+    ("Department", [
+        _idx("PK_Department", "department_id", "PRIMARY KEY"),
+    ]),
+    ("Employee", [
+        _idx("PK_Employee", "employee_id", "PRIMARY KEY"),
+        _idx("UQ_Employee_LicenseNumber", "license_number", "UNIQUE"),
+        _idx("IX_Employee_DepartmentId", "department_id", "INDEX"),
+        _idx("IX_Employee_Type", "employee_type", "INDEX"),
+        _idx("IX_Employee_Specialization", "specialization", "INDEX"),
+    ]),
+    ("Patient", [
+        _idx("PK_Patient", "patient_id", "PRIMARY KEY"),
+        _idx("IX_Patient_InsuranceId", "insurance_id", "INDEX"),
+        _idx("IX_Patient_Name", "last_name, first_name", "INDEX"),
+    ]),
+    ("DoctorSchedule", [
+        _idx("PK_DoctorSchedule", "schedule_id", "PRIMARY KEY"),
+        _idx(
+            "UQ_DoctorSchedule_EmployeeDateTime",
+            "employee_id, schedule_date, slot_time",
+            "UNIQUE",
+        ),
+        _idx(
+            "IX_DoctorSchedule_EmployeeDate",
+            "employee_id, schedule_date",
+            "INDEX",
+        ),
+    ]),
+    ("DoctorVacation", [
+        _idx("PK_DoctorVacation", "vacation_id", "PRIMARY KEY"),
+        _idx("IX_DoctorVacation_ApprovedBy", "approved_by", "INDEX"),
+        _idx(
+            "IX_DoctorVacation_EmpDates",
+            "employee_id, start_date, end_date",
+            "INDEX",
+        ),
+    ]),
+    ("Appointment", [
+        _idx("PK_Appointment", "appointment_id", "PRIMARY KEY"),
+        _idx(
+            "UQ_Appointment_PatientSchedule",
+            "patient_id, schedule_id",
+            "UNIQUE",
+        ),
+        _idx("IX_Appointment_PatientId", "patient_id", "INDEX"),
+        _idx("IX_Appointment_ScheduleId", "schedule_id", "INDEX"),
+        _idx("IX_Appointment_Status", "status", "INDEX"),
+        _idx("IX_Appointment_BillingStatus", "billing_status", "INDEX"),
+        _idx("IX_Appointment_BillingDate", "billing_date", "INDEX"),
+    ]),
+    ("AppointmentHistory", [
+        _idx("PK_AppointmentHistory", "history_id", "PRIMARY KEY"),
+        _idx("IX_ApptHist_Appointment", "appointment_id", "INDEX"),
+    ]),
+    ("Room", [
+        _idx("PK_Room", "room_id", "PRIMARY KEY"),
+        _idx("UQ_Room_RoomNumber", "room_number", "UNIQUE"),
+        _idx("IX_Room_DepartmentId", "department_id", "INDEX"),
+    ]),
+    ("Bed", [
+        _idx("PK_Bed", "bed_id", "PRIMARY KEY"),
+        _idx("UQ_Bed_RoomBedNumber", "room_id, bed_number", "UNIQUE"),
+        _idx("IX_Bed_RoomId", "room_id", "INDEX"),
+    ]),
+    ("Admission", [
+        _idx("PK_Admission", "admission_id", "PRIMARY KEY"),
+        _idx("IX_Admission_PatientId", "patient_id", "INDEX"),
+        _idx("IX_Admission_BedId", "bed_id", "INDEX"),
+        _idx(
+            "IX_Admission_AdmittingEmployeeId",
+            "admitting_employee_id",
+            "INDEX",
+        ),
+        _idx("IX_Admission_IcuApprovedBy", "icu_approved_by", "INDEX"),
+        _idx("IX_Admission_Bed_Status", "bed_id, status", "INDEX"),
+        _idx("IX_Admission_BillingStatus", "billing_status", "INDEX"),
+        _idx("IX_Admission_BillingDate", "billing_date", "INDEX"),
+    ]),
+    ("Prescription", [
+        _idx("PK_Prescription", "prescription_id", "PRIMARY KEY"),
+        _idx("IX_Prescription_AppointmentId", "appointment_id", "INDEX"),
+        _idx("IX_Prescription_AdmissionId", "admission_id", "INDEX"),
+    ]),
+    ("Payment", [
+        _idx("PK_Payment", "payment_id", "PRIMARY KEY"),
+        _idx("IX_Payment_AppointmentId", "appointment_id", "INDEX"),
+        _idx("IX_Payment_AdmissionId", "admission_id", "INDEX"),
+    ]),
+]
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -256,8 +425,36 @@ def index():
                 counts[t] = "-"
                 errors.append(f"{t}: {e}")
     return render_template(
-        "index.html", counts=counts, tables=TABLES, views=VIEWS,
-        views_meta=VIEWS_META, errors=errors,
+        "index.html", counts=counts, tables=TABLES, errors=errors,
+    )
+
+
+@app.route("/views")
+def views_index():
+    return render_template(
+        "views_index.html", views=VIEWS, views_meta=VIEWS_META,
+    )
+
+
+@app.route("/indexes")
+def indexes_index():
+    total = sum(len(ix) for _, ix in INDEXES_BY_TABLE)
+    pk_count = sum(
+        1 for _, ix in INDEXES_BY_TABLE for i in ix if i["kind"] == "PRIMARY KEY"
+    )
+    uq_count = sum(
+        1 for _, ix in INDEXES_BY_TABLE for i in ix if i["kind"] == "UNIQUE"
+    )
+    ix_count = sum(
+        1 for _, ix in INDEXES_BY_TABLE for i in ix if i["kind"] == "INDEX"
+    )
+    return render_template(
+        "indexes.html",
+        groups=INDEXES_BY_TABLE,
+        total=total,
+        pk_count=pk_count,
+        uq_count=uq_count,
+        ix_count=ix_count,
     )
 
 

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Views{% endblock %}
+{% block content %}
+<h1>Views</h1>
+<p class="muted">
+  Read-only SQL views over the HMS schema. Each view encapsulates a
+  commonly needed join so reports and screens do not have to rewrite it.
+  Click a view to browse up to 500 rows against the live database.
+</p>
+
+<div>
+  {% for v in views_meta %}
+  <a
+    class="card"
+    style="margin-bottom: 12px"
+    href="{{ url_for('view_show', name=v.name) }}"
+  >
+    <strong>{{ v.title }}</strong>
+    <div class="muted">{{ v.description }}</div>
+    <div class="muted" style="margin-top: 6px; font-size: 0.8em">
+      <code>{{ v.name }}</code>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}
