@@ -18,7 +18,7 @@ DB_DSN = "rsc9f2o9gywzt7xi_tp"
 # -- Wallet location ---------------------------------------------------------
 # Directory containing the extracted wallet files
 # (tnsnames.ora, sqlnet.ora, cwallet.sso, ewallet.pem, ewallet.p12, ...).
-WALLET_DIR = "/Users/nireekshahuns/Desktop/Wallet_RSC9F2O9GYWZT7XI"
+WALLET_DIR = "/Users/darshanaswathappa/Downloads/Wallet_RSC9F2O9GYWZT7XI"
 
 # Password you set when you downloaded the wallet from OCI.
 WALLET_PASSWORD = "Darshan5579!@#"
