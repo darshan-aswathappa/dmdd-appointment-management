@@ -696,13 +696,13 @@ POSITIVE_FLOWS = [
         "blurb": "Mark a Scheduled appointment Completed and set bill_amount. "
                  "trg_AppointmentInsDiscount computes insurance coverage.",
     },
-    {
-        "endpoint": "flow_availability",
-        "title": "Check doctor availability",
-        "procedure": "sp_GetDoctorAvailability",
-        "blurb": "Read-only: list open slots for a doctor in a date range. "
-                 "Excludes vacations and already-booked slots.",
-    },
+    # {
+    #     "endpoint": "flow_availability",
+    #     "title": "Check doctor availability",
+    #     "procedure": "sp_GetDoctorAvailability",
+    #     "blurb": "Read-only: list open slots for a doctor in a date range. "
+    #              "Excludes vacations and already-booked slots.",
+    # },
 ]
 
 # Negative scenarios: each is a pre-canned call that triggers a specific
@@ -950,33 +950,32 @@ def _run_negative_scenario(key):
         )
 
     if key == "cancel-within-24h":
-        import datetime as _dt
         schedule_id = None
         appt_id = None
         try:
             with current_conn() as conn:
                 cur = conn.cursor()
-                today = _dt.datetime.now().replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                slot_time = (
-                    _dt.datetime.now() + _dt.timedelta(minutes=30)
-                ).strftime("%H:%M")
                 sched_var = cur.var(oracledb.NUMBER)
+                slot_var = cur.var(str)
                 cur.execute(
                     """
                     INSERT INTO DoctorSchedule
                         (employee_id, schedule_date, slot_time,
                          slot_duration_mins, is_available)
-                    VALUES (1, :d, :t, 30, 1)
-                    RETURNING schedule_id INTO :id
+                    VALUES (1,
+                            TRUNC(SYSDATE + 30/1440),
+                            TO_CHAR(SYSDATE + 30/1440, 'HH24:MI'),
+                            30, 1)
+                    RETURNING schedule_id, slot_time INTO :id, :st
                     """,
-                    d=today, t=slot_time, id=sched_var,
+                    id=sched_var, st=slot_var,
                 )
-                schedule_id = int(sched_var.getvalue())
+                schedule_id = int(sched_var.getvalue()[0])
+                slot_time = slot_var.getvalue()[0]
                 notes.append(
-                    f"Created DoctorSchedule {schedule_id} for today at "
-                    f"{slot_time} (30 min in the future)."
+                    f"Created DoctorSchedule {schedule_id} at {slot_time} "
+                    f"(30 min ahead of DB SYSDATE, i.e. inside the "
+                    f"24-hour window)."
                 )
 
                 appt_var = cur.var(oracledb.NUMBER)
@@ -991,7 +990,7 @@ def _run_negative_scenario(key):
                     """,
                     s=schedule_id, id=appt_var,
                 )
-                appt_id = int(appt_var.getvalue())
+                appt_id = int(appt_var.getvalue()[0])
                 conn.commit()
                 notes.append(f"Booked appointment {appt_id} on that slot.")
 
