@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 {% block title %}{{ name }} &mdash; view{% endblock %}
 {% block content %}
-<h1><code>{{ name }}</code> <span class="muted">(view)</span></h1>
+<h1>
+    {% if meta %}{{ meta.title }}{% else %}<code>{{ name }}</code>{% endif %}
+    <span class="muted">(view)</span>
+</h1>
+{% if meta %}
+<p class="muted"><code>{{ name }}</code> &mdash; {{ meta.description }}</p>
+{% endif %}
 <p class="muted">Up to 500 rows. <a href="{{ url_for('index') }}">Back to dashboard</a></p>
 
 <div class="views-nav">
     {% for v in views %}
         <a href="{{ url_for('view_show', name=v) }}"
-           class="{% if v == name %}active{% endif %}">{{ v }}</a>
+           title="{{ views_meta.get(v).description if views_meta and views_meta.get(v) else v }}"
+           class="{% if v == name %}active{% endif %}">{{ views_meta.get(v).title if views_meta and views_meta.get(v) else v }}</a>
     {% endfor %}
 </div>
 

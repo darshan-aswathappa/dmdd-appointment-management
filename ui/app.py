@@ -182,6 +182,64 @@ def whoami():
 
 
 # ---------------------------------------------------------------------------
+# View metadata (title + description for each VIEWS entry)
+# ---------------------------------------------------------------------------
+VIEWS_META = [
+    {
+        "name": "V_APPOINTMENT",
+        "title": "Appointment (consolidated)",
+        "description": (
+            "Consolidated appointment view joining Appointment, "
+            "DoctorSchedule, Patient, Employee, and Department. Use it to "
+            "read a full appointment record without hand-writing the joins."
+        ),
+    },
+    {
+        "name": "V_DOCTOR_SCHEDULE",
+        "title": "Doctor Schedule",
+        "description": (
+            "Doctor schedule availability with current booking counts and "
+            "vacation flags per slot. One row per DoctorSchedule slot."
+        ),
+    },
+    {
+        "name": "V_PRESCRIPTION",
+        "title": "Prescription",
+        "description": (
+            "Prescription details enriched with patient and doctor info, "
+            "sourced from either the Appointment or Admission chain."
+        ),
+    },
+    {
+        "name": "V_BILLING",
+        "title": "Billing (unified)",
+        "description": (
+            "Unified billing stream. UNIONs billing data from Appointment "
+            "and Admission so reports can treat billing as one source."
+        ),
+    },
+    {
+        "name": "V_PAYMENT",
+        "title": "Payment",
+        "description": (
+            "Payment records joined to their originating Appointment or "
+            "Admission plus the patient, with billing context."
+        ),
+    },
+    {
+        "name": "V_BED_STATUS",
+        "title": "Bed Status",
+        "description": (
+            "Real-time bed occupancy. Every bed with its room, status "
+            "(Available / Occupied / Maintenance), and current patient."
+        ),
+    },
+]
+
+VIEWS_META_BY_NAME = {v["name"]: v for v in VIEWS_META}
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -198,7 +256,8 @@ def index():
                 counts[t] = "-"
                 errors.append(f"{t}: {e}")
     return render_template(
-        "index.html", counts=counts, tables=TABLES, views=VIEWS, errors=errors
+        "index.html", counts=counts, tables=TABLES, views=VIEWS,
+        views_meta=VIEWS_META, errors=errors,
     )
 
 
@@ -399,7 +458,11 @@ def view_show(name):
         cur.execute(f"SELECT * FROM {name} FETCH FIRST 500 ROWS ONLY")
         cols = [d[0] for d in cur.description]
         rows = [[_display_cell(v) for v in r] for r in cur.fetchall()]
-    return render_template("view_list.html", name=name, cols=cols, rows=rows, views=VIEWS)
+    meta = VIEWS_META_BY_NAME.get(name)
+    return render_template(
+        "view_list.html", name=name, cols=cols, rows=rows, views=VIEWS,
+        meta=meta, views_meta=VIEWS_META_BY_NAME,
+    )
 
 
 # ---------------------------------------------------------------------------
