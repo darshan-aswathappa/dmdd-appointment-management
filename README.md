@@ -84,6 +84,8 @@ proj/
 |   |-- rpt_Revenue.sql
 |   |-- rpt_CancellationStats.sql
 |
+|-- scripts/                           # Appointment flow scripts (happy + negative)
+|
 |-- Tests/                             # Test Case Scripts
 |   |-- TC01_DuplicateBooking.sql
 |   |-- TC02_CancelBefore24hr.sql
@@ -111,6 +113,81 @@ See [MASTER_EXECUTION_GUIDE.sql](MASTER_EXECUTION_GUIDE.sql) for the step-by-ste
 4. Execute reports as **HMS** or **operator_user**.
 5. Run test cases as **operator_user** to verify permissions and business rules.
 6. Run `SET SERVEROUTPUT ON;` before test cases to see DBMS_OUTPUT messages.
+
+---
+
+## Appointment Flow Scripts
+
+The `scripts/` folder contains 15 standalone SQL*Plus scripts that replay the happy-path and negative-path appointment flows exposed by the Flask UI at `/flows`. They are intended for demo, grading, and troubleshooting without running the web app. Each script only calls procedures that are already deployed in the `HMS` schema (`sp_BookAppointment`, `sp_CancelAppointment`, `sp_RescheduleAppointment`, `sp_CompleteAppointment`, `sp_GetDoctorAvailability`) — no DDL is executed.
+
+### Prerequisites
+
+- DDL, DML, functions, procedures, and triggers from the sections above are installed and seeded.
+- You connect as `HMS` (schema owner) or `admin_user` (has `HospitalAdmin` role). Running these as `operator_user` will fail with `ORA-01031: insufficient privileges` because the operator role is read-only.
+
+### Connecting
+
+The database is Oracle Autonomous Database and requires an mTLS wallet for SQL*Plus / SQLcl. Point `TNS_ADMIN` at your wallet directory, then connect using the `rsc9f2o9gywzt7xi_tp` TNS alias:
+
+```
+export TNS_ADMIN=/path/to/Wallet_RSC9F2O9GYWZT7XI
+sqlplus HMS/<password>@rsc9f2o9gywzt7xi_tp
+```
+
+Each teammate supplies their own wallet path and password; do not hardcode them. SQLcl (`sql` command) works the same way.
+
+### Running a script
+
+From the sqlplus prompt:
+
+```
+@scripts/book_appointment.sql
+```
+
+Or in batch mode from the shell:
+
+```
+sqlplus -S HMS/<password>@rsc9f2o9gywzt7xi_tp @scripts/book_appointment.sql
+```
+
+`SET SERVEROUTPUT ON` is already inside each script, so `DBMS_OUTPUT` lines are printed without extra setup.
+
+### Happy-path scripts
+
+| Script | Procedure called | Purpose |
+|--------|------------------|---------|
+| book_appointment.sql | sp_BookAppointment | Books patient 21 with doctor slot 5, In-Person, returns the new appointment id via an OUT bind |
+| cancel_appointment.sql | sp_CancelAppointment | Cancels appointment 1 with a reason |
+| reschedule_appointment.sql | sp_RescheduleAppointment | Moves appointment 1 to slot 10 while preserving history |
+| complete_appointment.sql | sp_CompleteAppointment | Marks appointment 1 Completed with bill_amount 350, firing `trg_AppointmentInsDiscount` |
+| check_doctor_availability.sql | sp_GetDoctorAvailability | Opens a REFCURSOR for doctor 1 across 2026-04-01 to 2026-04-30 and `PRINT`s the result |
+
+### Negative-flow scripts
+
+Each script is expected to fail with a specific `ORA-200xx` that demonstrates a business rule.
+
+| Script | Rule | Expected error |
+|--------|------|----------------|
+| neg_book_invalid_patient.sql | Patient existence | ORA-20001 |
+| neg_book_invalid_slot.sql | Schedule existence | ORA-20002 |
+| neg_book_vacation.sql | BR5 (vacation) | ORA-20003 |
+| neg_book_duplicate.sql | BR1 / TV1 (duplicate) | ORA-20004 |
+| neg_cancel_invalid.sql | Appointment existence | ORA-20001 |
+| neg_cancel_within_24h.sql | BR2 (24-hour rule) | ORA-20002 |
+| neg_reschedule_invalid_appt.sql | Appointment existence | ORA-20001 |
+| neg_reschedule_invalid_slot.sql | Schedule existence | ORA-20002 |
+| neg_reschedule_vacation.sql | BR5 (vacation) | ORA-20003 |
+| neg_complete_invalid.sql | Appointment existence | ORA-20001 |
+
+### Expected behavior
+
+- Happy-path scripts COMMIT and print a success line via `DBMS_OUTPUT`.
+- Negative-flow scripts raise the `ORA-200xx` listed above and leave no partial state.
+- `neg_cancel_within_24h.sql` is the only script that is not a plain `EXEC`: it is an anonymous PL/SQL block that creates a schedule slot 30 minutes from `SYSDATE`, books an appointment on it, attempts the cancel (which must fail with ORA-20002), and cleans up both rows in an exception handler so the script is self-contained.
+
+### Editing defaults
+
+The happy-path scripts use hardcoded IDs (patient 21, slot 5, appointment 1, doctor 1, etc.) that match the shipped seed data. If your local seed state has drifted — for example, appointment 1 is already cancelled or slot 5 is full — edit the bind values at the top of the script before running.
 
 ---
 
