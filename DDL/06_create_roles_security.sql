@@ -16,91 +16,106 @@
 -- 1. CREATE DATABASE ROLES
 -- =====================================================
 
-CREATE ROLE HospitalAdmin;
-CREATE ROLE HospitalOperator;
+create role hospitaladmin;
+create role hospitaloperator;
 
 -- =====================================================
 -- 2. GRANT PERMISSIONS TO HospitalAdmin
 -- Full CRUD on all HMS-owned tables
 -- =====================================================
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Insurance          TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Department         TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Employee           TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Patient            TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.DoctorSchedule     TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.DoctorVacation     TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Appointment        TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.AppointmentHistory TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Room               TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Bed                TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Admission          TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Prescription       TO HospitalAdmin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON HMS.Payment            TO HospitalAdmin;
+grant select,insert,update,delete on hms.insurance to hospitaladmin;
+grant select,insert,update,delete on hms.department to hospitaladmin;
+grant select,insert,update,delete on hms.employee to hospitaladmin;
+grant select,insert,update,delete on hms.patient to hospitaladmin;
+grant select,insert,update,delete on hms.doctorschedule to hospitaladmin;
+grant select,insert,update,delete on hms.doctorvacation to hospitaladmin;
+grant select,insert,update,delete on hms.appointment to hospitaladmin;
+grant select,insert,update,delete on hms.appointmenthistory to hospitaladmin;
+grant select,insert,update,delete on hms.room to hospitaladmin;
+grant select,insert,update,delete on hms.bed to hospitaladmin;
+grant select,insert,update,delete on hms.admission to hospitaladmin;
+grant select,insert,update,delete on hms.prescription to hospitaladmin;
+grant select,insert,update,delete on hms.payment to hospitaladmin;
 
 -- Grant SELECT on HMS-owned views to HospitalAdmin
-GRANT SELECT ON HMS.v_appointment      TO HospitalAdmin;
-GRANT SELECT ON HMS.v_doctor_schedule  TO HospitalAdmin;
-GRANT SELECT ON HMS.v_prescription     TO HospitalAdmin;
-GRANT SELECT ON HMS.v_billing          TO HospitalAdmin;
-GRANT SELECT ON HMS.v_payment          TO HospitalAdmin;
-GRANT SELECT ON HMS.v_bed_status       TO HospitalAdmin;
+grant select on hms.v_appointment to hospitaladmin;
+grant select on hms.v_doctor_schedule to hospitaladmin;
+grant select on hms.v_prescription to hospitaladmin;
+grant select on hms.v_billing to hospitaladmin;
+grant select on hms.v_payment to hospitaladmin;
+grant select on hms.v_bed_status to hospitaladmin;
 
 -- Grant EXECUTE on appointment procedures + helper function to HospitalAdmin
 -- (operator_user intentionally does NOT receive these, so EXECUTE from the
 --  operator role raises ORA-01031 / ORA-00942 and demonstrates the
 --  read-only boundary in the UI).
-GRANT EXECUTE ON HMS.sp_BookAppointment       TO HospitalAdmin;
-GRANT EXECUTE ON HMS.sp_CancelAppointment     TO HospitalAdmin;
-GRANT EXECUTE ON HMS.sp_RescheduleAppointment TO HospitalAdmin;
-GRANT EXECUTE ON HMS.sp_CompleteAppointment   TO HospitalAdmin;
-GRANT EXECUTE ON HMS.sp_GetDoctorAvailability TO HospitalAdmin;
-GRANT EXECUTE ON HMS.fn_IsDoctorOnVacation    TO HospitalAdmin;
+grant execute on hms.sp_bookappointment to hospitaladmin;
+grant execute on hms.sp_cancelappointment to hospitaladmin;
+grant execute on hms.sp_rescheduleappointment to hospitaladmin;
+grant execute on hms.sp_completeappointment to hospitaladmin;
+grant execute on hms.sp_getdoctoravailability to hospitaladmin;
+grant execute on hms.fn_isdoctoronvacation to hospitaladmin;
 
 -- =====================================================
 -- 3. GRANT PERMISSIONS TO HospitalOperator
 -- Read-only access to tables + views, execute on procedures
 -- =====================================================
-GRANT SELECT ON HMS.Insurance          TO HospitalOperator;
-GRANT SELECT ON HMS.Department         TO HospitalOperator;
-GRANT SELECT ON HMS.Employee           TO HospitalOperator;
-GRANT SELECT ON HMS.Patient            TO HospitalOperator;
-GRANT SELECT ON HMS.DoctorSchedule     TO HospitalOperator;
-GRANT SELECT ON HMS.DoctorVacation     TO HospitalOperator;
-GRANT SELECT ON HMS.Appointment        TO HospitalOperator;
-GRANT SELECT ON HMS.AppointmentHistory TO HospitalOperator;
-GRANT SELECT ON HMS.Room               TO HospitalOperator;
-GRANT SELECT ON HMS.Bed                TO HospitalOperator;
-GRANT SELECT ON HMS.Admission          TO HospitalOperator;
-GRANT SELECT ON HMS.Prescription       TO HospitalOperator;
-GRANT SELECT ON HMS.Payment            TO HospitalOperator;
+grant select on hms.insurance to hospitaloperator;
+grant select on hms.department to hospitaloperator;
+grant select on hms.employee to hospitaloperator;
+grant select on hms.patient to hospitaloperator;
+grant select on hms.doctorschedule to hospitaloperator;
+grant select on hms.doctorvacation to hospitaloperator;
+grant select on hms.appointment to hospitaloperator;
+grant select on hms.appointmenthistory to hospitaloperator;
+grant select on hms.room to hospitaloperator;
+grant select on hms.bed to hospitaloperator;
+grant select on hms.admission to hospitaloperator;
+grant select on hms.prescription to hospitaloperator;
+grant select on hms.payment to hospitaloperator;
 
 -- Grant SELECT on HMS-owned views to HospitalOperator
-GRANT SELECT ON HMS.v_appointment      TO HospitalOperator;
-GRANT SELECT ON HMS.v_doctor_schedule  TO HospitalOperator;
-GRANT SELECT ON HMS.v_prescription     TO HospitalOperator;
-GRANT SELECT ON HMS.v_billing          TO HospitalOperator;
-GRANT SELECT ON HMS.v_payment          TO HospitalOperator;
-GRANT SELECT ON HMS.v_bed_status       TO HospitalOperator;
+grant select on hms.v_appointment to hospitaloperator;
+grant select on hms.v_doctor_schedule to hospitaloperator;
+grant select on hms.v_prescription to hospitaloperator;
+grant select on hms.v_billing to hospitaloperator;
+grant select on hms.v_payment to hospitaloperator;
+grant select on hms.v_bed_status to hospitaloperator;
+
+-- Grant EXECUTE on appointment procedures + helper function to HospitalOperator
+-- so the operator role has "Execute access" (procedure-only write path).
+grant execute on hms.sp_bookappointment to hospitaloperator;
+grant execute on hms.sp_cancelappointment to hospitaloperator;
+grant execute on hms.sp_rescheduleappointment to hospitaloperator;
+grant execute on hms.sp_completeappointment to hospitaloperator;
+grant execute on hms.sp_getdoctoravailability to hospitaloperator;
+grant execute on hms.fn_isdoctoronvacation to hospitaloperator;
 
 -- =====================================================
 -- 4. ASSIGN ROLES TO APPLICATION USERS
 -- =====================================================
 
-GRANT HospitalAdmin TO admin_user;
-ALTER USER admin_user DEFAULT ROLE HospitalAdmin;
+grant hospitaladmin to admin_user;
+alter user admin_user default role hospitaladmin;
 
-GRANT HospitalOperator TO operator_user;
-ALTER USER operator_user DEFAULT ROLE HospitalOperator;
+grant hospitaloperator to operator_user;
+alter user operator_user default role hospitaloperator;
 
 -- =====================================================
 -- 5. VERIFICATION QUERIES (uncomment to run)
 -- =====================================================
 
-SELECT grantee, granted_role
-FROM dba_role_privs
-WHERE granted_role IN ('HOSPITALADMIN', 'HOSPITALOPERATOR');
+select grantee,
+       granted_role
+  from dba_role_privs
+ where granted_role in ( 'HOSPITALADMIN',
+                         'HOSPITALOPERATOR' );
 
-SELECT grantee, table_name, privilege
-FROM dba_tab_privs
-WHERE grantee IN ('HOSPITALADMIN', 'HOSPITALOPERATOR')
-ORDER BY grantee, table_name;
+select grantee,
+       table_name,
+       privilege
+  from dba_tab_privs
+ where grantee in ( 'HOSPITALADMIN',
+                    'HOSPITALOPERATOR' )
+ order by grantee,
+          table_name;

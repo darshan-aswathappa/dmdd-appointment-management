@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+ˀ{% extends "base.html" %}
 {% block title %}Database Users{% endblock %}
 {% block content %}
 
@@ -88,24 +88,21 @@
   <h3>operator_user <span class="muted" style="font-size: 0.85em; font-weight: normal;">(HospitalOperator role)</span></h3>
   <div class="sub">Role: <code>HospitalOperator</code> &middot; Credentials: <code>operator_user / OperatorPass456</code></div>
   <p>
-    The read-only operator. Holds the <code>HospitalOperator</code> role,
-    which grants <code>SELECT</code> on all HMS tables and views and
-    nothing else &mdash; no <code>INSERT</code>, no <code>UPDATE</code>,
-    no <code>DELETE</code>, no <code>EXECUTE</code>.
+    The least-privilege operator. Holds the <code>HospitalOperator</code> role,
+    which grants <code>SELECT</code> on all HMS tables and views and execute permissions to &mdash; no <code>INSERT</code>, no <code>UPDATE</code>,
+    no <code>DELETE</code>.
   </p>
   <p><strong>When to use it</strong></p>
   <ul>
     <li>Reporting, dashboards, and analytics consumers.</li>
     <li>Support staff who need visibility but must not be able to mutate data.</li>
     <li>Least-privilege integrations (exports, BI tools).</li>
+    <li>Running appointment flows (book / cancel / reschedule / complete) without granting raw table-write privileges.</li>
   </ul>
   <p><strong>Expected permission errors</strong></p>
   <ul>
     <li>Any CRUD <em>Add</em> / <em>Edit</em> / <em>Delete</em> action &rarr;
       <code>ORA-01031: insufficient privileges</code>.</li>
-    <li>Any appointment flow that calls a procedure &rarr;
-      <code>ORA-00942</code> or <code>ORA-01031</code> (depending on
-      how the driver reports it).</li>
     <li><em>Views</em>, <em>Reports</em>, and browse pages continue to work.</li>
   </ul>
 </div>
@@ -143,7 +140,7 @@
       <td class="op">EXECUTE on appointment procedures</td>
       <td class="yes">yes</td>
       <td class="yes">yes</td>
-      <td class="no">no</td>
+      <td class="yes">yes</td>
     </tr>
     <tr>
       <td class="op">Run saved reports (SELECT-based)</td>
@@ -160,13 +157,15 @@
   <li>Go to <strong>Tables</strong> &rarr; any table &rarr;
     <em>Add</em>. Submit the form &rarr; flash shows
     <em>&ldquo;Permission denied as operator_user - ORA-01031:
-    insufficient privileges&rdquo;</em>.</li>
-  <li>Try an appointment flow (<strong>Flows</strong> &rarr; Book) &rarr;
-    same permission error.</li>
+    insufficient privileges&rdquo;</em> (direct DML is blocked).</li>
+  <li>Run an appointment flow (<strong>Flows</strong> &rarr; Book) &rarr;
+    <strong>succeeds</strong>. This is the teaching moment: the procedure
+    path is allowed even though raw table writes are not &mdash; the role
+    has <em>execute</em> access, not <em>DML</em> access.</li>
   <li>Open a <strong>Report</strong> &rarr; works normally (reports are
     SELECT-only).</li>
   <li>Switch back to <code>admin_user</code> or <code>HMS</code> &rarr;
-    rerun the write operation and it succeeds.</li>
+    rerun the direct table write and it succeeds (raw DML is restored).</li>
 </ol>
 
 <p class="muted">
